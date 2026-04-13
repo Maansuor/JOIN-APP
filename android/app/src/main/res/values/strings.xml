@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Join</string>
+    <!-- Web Client ID para Google Sign-In (obtener idToken) -->
+    <string name="default_web_client_id">73446753695-mguf0h4g2cro3p84q91fbsva9jpuf96c.apps.googleusercontent.com</string>
+</resources>

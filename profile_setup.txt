@@ -1,0 +1,14 @@
+﻿Field	Type	Null	Key	Default	Extra
+user_id	char(36)	NO	PRI	NULL	
+step_avatar	tinyint(1)	NO		0	
+step_bio	tinyint(1)	NO		0	
+step_interests	tinyint(1)	NO		0	
+step_notifications	tinyint(1)	NO		0	
+step_location	tinyint(1)	NO		0	
+step_birth_date	tinyint(1)	NO		0	
+step_gender	tinyint(1)	NO		0	
+step_age_consent	tinyint(1)	NO		0	
+step_data_consent	tinyint(1)	NO		0	
+setup_completed	tinyint(1)	NO		0	
+completed_at	datetime	YES		NULL	
+updated_at	datetime	NO		current_timestamp()	on update current_timestamp()

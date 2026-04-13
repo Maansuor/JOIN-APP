@@ -1,0 +1,10 @@
+﻿Field	Type	Null	Key	Default	Extra
+id	char(36)	NO	PRI	NULL	
+activity_id	char(36)	NO	MUL	NULL	
+user_id	char(36)	NO	MUL	NULL	
+message	text	NO		NULL	
+type	enum('text','image','system')	NO		text	
+is_pinned	tinyint(1)	NO		0	
+is_deleted	tinyint(1)	NO		0	
+deleted_at	datetime	YES		NULL	
+sent_at	datetime	NO		current_timestamp()	

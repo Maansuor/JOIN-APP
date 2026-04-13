@@ -1,0 +1,5 @@
+﻿Field	Type	Null	Key	Default	Extra
+id	int(10) unsigned	NO	PRI	NULL	auto_increment
+message_id	char(36)	NO	MUL	NULL	
+image_url	varchar(500)	NO		NULL	
+sort_order	tinyint(4)	NO		0	

@@ -1,0 +1,83 @@
+import 'package:join_app/core/models/user_model.dart';
+
+/// Mock data de usuarios para desarrollo.
+/// En Fase 2 esto se reemplaza por llamadas al UserRepository.
+///
+/// Los IDs 'user_juan' y 'user_max' deben coincidir con los
+/// definidos en AppState._mockCredentials().
+final List<UserModel> mockUsers = [
+  UserModel(
+    id: 'user_juan',
+    name: 'Juan Pérez García',
+    profileImageUrl: 'assets/images/avatars/avatar_4.png',
+    rating: 4.9,
+    activitiesAttended: 24,
+    activitiesCreated: 8,
+    bio: 'Organizador activo de experiencias grupales. Amo reunir personas.',
+    interests: ['trekking', 'deportes', 'gastronomía', 'naturaleza'],
+    isVerified: true,
+    joinedDate: DateTime(2023, 1, 10),
+    email: 'juan@join.app',
+  ),
+  UserModel(
+    id: 'user_max',
+    name: 'Max Sulca Ortiz',
+    profileImageUrl: 'assets/images/avatars/avatar_1.png',
+    rating: 4.7,
+    activitiesAttended: 12,
+    activitiesCreated: 2,
+    bio: 'Siempre buscando nuevas aventuras y personas interesantes.',
+    interests: ['música', 'arte', 'fotografía', 'viajes'],
+    isVerified: true,
+    joinedDate: DateTime(2023, 5, 22),
+    email: 'max@join.app',
+  ),
+  UserModel(
+    id: 'user_1',
+    name: 'Carlos Gómez',
+    profileImageUrl: 'assets/images/avatars/avatar_2.png',
+    rating: 4.9,
+    activitiesAttended: 15,
+    activitiesCreated: 4,
+    bio: 'Futbolista apasionado. Creo planes cada fin de semana.',
+    interests: ['futbol', 'deportes', 'amistad'],
+    isVerified: true,
+    joinedDate: DateTime(2023, 1, 20),
+  ),
+  UserModel(
+    id: 'user_2',
+    name: 'Sofía Ruiz',
+    profileImageUrl: 'assets/images/avatars/avatar_3.png',
+    rating: 4.7,
+    activitiesAttended: 12,
+    activitiesCreated: 5,
+    bio: 'Foodie y viajera. Me encanta organizar cenas temáticas.',
+    interests: ['gastronomía', 'viajes', 'cultura'],
+    isVerified: true,
+    joinedDate: DateTime(2023, 3, 10),
+  ),
+  UserModel(
+    id: 'user_3',
+    name: 'Diego Fernández',
+    profileImageUrl: 'assets/images/avatars/avatar_4.png',
+    rating: 4.6,
+    activitiesAttended: 8,
+    activitiesCreated: 1,
+    bio: 'Ciclista y aventurero. Organizador de rutas en bicicleta.',
+    interests: ['ciclismo', 'aventura', 'naturaleza'],
+    isVerified: true,
+    joinedDate: DateTime(2023, 5, 5),
+  ),
+  UserModel(
+    id: 'user_4',
+    name: 'Marina López',
+    profileImageUrl: 'assets/images/avatars/avatar_5.png',
+    rating: 4.8,
+    activitiesAttended: 20,
+    activitiesCreated: 8,
+    bio: 'Yogui y meditadora. Organizo sesiones de bienestar.',
+    interests: ['yoga', 'meditación', 'bienestar', 'naturaleza'],
+    isVerified: true,
+    joinedDate: DateTime(2022, 11, 8),
+  ),
+];

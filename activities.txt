@@ -1,0 +1,24 @@
+﻿Field	Type	Null	Key	Default	Extra
+id	char(36)	NO	PRI	NULL	
+organizer_id	char(36)	NO	MUL	NULL	
+title	varchar(150)	NO		NULL	
+description	text	NO		NULL	
+category	enum('Deportes','Comida','Naturaleza','Chill','Juntas','Arte','Música','Otro')	NO	MUL	Otro	
+cover_image_url	varchar(500)	YES		NULL	
+location_name	varchar(200)	NO		NULL	
+address	varchar(300)	YES		NULL	
+latitude	decimal(10,7)	YES	MUL	NULL	
+longitude	decimal(10,7)	YES		NULL	
+event_date	date	NO		NULL	
+event_time	time	NO		NULL	
+event_datetime	datetime	NO	MUL	NULL	
+max_participants	smallint(5) unsigned	NO		10	
+current_participants	smallint(5) unsigned	NO		0	
+age_range	varchar(50)	YES		Libre	
+distance_km	decimal(6,2)	YES		NULL	
+status	enum('draft','active','full','cancelled','completed')	NO	MUL	active	
+is_active	tinyint(1)	NO		1	
+is_deleted	tinyint(1)	NO		0	
+deleted_at	datetime	YES		NULL	
+created_at	datetime	NO		current_timestamp()	
+updated_at	datetime	NO		current_timestamp()	on update current_timestamp()

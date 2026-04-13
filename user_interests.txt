@@ -1,0 +1,4 @@
+﻿Field	Type	Null	Key	Default	Extra
+id	int(10) unsigned	NO	PRI	NULL	auto_increment
+user_id	char(36)	NO	MUL	NULL	
+tag	varchar(50)	NO	MUL	NULL	

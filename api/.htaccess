@@ -1,0 +1,32 @@
+# ══════════════════════════════════════════════════════════════
+#  api/.htaccess
+#  Permite que Apache pase el header Authorization a PHP.
+#  Sin esto, $_SERVER['HTTP_AUTHORIZATION'] queda vacío en XAMPP.
+# ══════════════════════════════════════════════════════════════
+
+Options -Indexes
+
+# ── Pasar Authorization header a PHP ──────────────────────────
+# Método 1: RewriteRule — funciona en mod_rewrite + CGI/FastCGI
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteCond %{HTTP:Authorization} .+
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+</IfModule>
+
+# Método 2: SetEnvIf — funciona en mod_setenvif
+<IfModule mod_setenvif.c>
+    SetEnvIf Authorization "(.+)" HTTP_AUTHORIZATION=$1
+</IfModule>
+
+# ── CORS para el emulador Android (10.0.2.2) ──────────────────
+<IfModule mod_headers.c>
+    Header always set Access-Control-Allow-Origin "*"
+    Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+    Header always set Access-Control-Allow-Headers "Authorization, Content-Type, Accept"
+    Header always set Access-Control-Max-Age "86400"
+</IfModule>
+
+# Responder a preflight OPTIONS sin tocar PHP
+RewriteCond %{REQUEST_METHOD} OPTIONS
+RewriteRule .* - [R=204,L]

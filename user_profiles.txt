@@ -1,0 +1,21 @@
+﻿Field	Type	Null	Key	Default	Extra
+user_id	char(36)	NO	PRI	NULL	
+display_name	varchar(100)	NO		NULL	
+birth_date	date	NO	MUL	NULL	
+gender	enum('male','female','non_binary','prefer_not_to_say')	NO		prefer_not_to_say	
+age_visible	tinyint(1)	NO		1	
+bio	text	YES		NULL	
+profile_image_url	varchar(500)	YES		NULL	
+is_verified	tinyint(1)	NO	MUL	0	
+rating	decimal(3,2)	NO	MUL	0.00	
+rating_count	int(10) unsigned	NO		0	
+activities_attended	int(10) unsigned	NO		0	
+activities_created	int(10) unsigned	NO		0	
+badges_received	int(10) unsigned	NO		0	
+show_email	tinyint(1)	NO		0	
+show_phone	tinyint(1)	NO		0	
+allow_location_tracking	tinyint(1)	NO		0	
+allow_notifications	tinyint(1)	NO		1	
+joined_date	date	NO		curdate()	
+last_active_at	datetime	YES		NULL	
+updated_at	datetime	NO		current_timestamp()	on update current_timestamp()

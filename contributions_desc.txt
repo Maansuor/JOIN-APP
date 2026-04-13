@@ -1,0 +1,11 @@
+﻿Field	Type	Null	Key	Default	Extra
+id	char(36)	NO	PRI	NULL	
+activity_id	char(36)	NO	MUL	NULL	
+created_by_user_id	char(36)	NO	MUL	NULL	
+title	varchar(150)	NO		NULL	
+description	text	YES		NULL	
+category	enum('food','drinks','supplies','transport','entertainment','other')	NO		other	
+is_required	tinyint(1)	NO		0	
+assigned_to_user_id	char(36)	YES	MUL	NULL	
+assigned_at	datetime	YES		NULL	
+created_at	datetime	NO		current_timestamp()	
