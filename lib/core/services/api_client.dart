@@ -25,15 +25,14 @@ class ApiClient {
   static final ApiClient instance = ApiClient._();
 
   // ── URL Base ─────────────────────────────────────────────
-  // 10.0.2.2 = localhost desde el emulador Android
-  // Para dispositivo físico: reemplaza con tu IP local (ej: 192.168.1.x)
-  static const String _emulatorHost = 'http://10.0.2.2';
+  // IP local de la máquina (evita problemas de firewall con emulador)
+  static const String _localHost = 'http://192.168.1.6';
   static const String _apiPath = '/join/api';
 
   String get baseUrl {
     if (kIsWeb) return 'http://localhost/join/api';
-    // En release, cambiar a la URL de producción
-    return (_emulatorHost) + _apiPath;
+    // Usar IP local para emulador Android
+    return (_localHost) + _apiPath;
   }
 
   // ── Token de sesión ───────────────────────────────────────
@@ -78,10 +77,15 @@ class ApiClient {
     try {
       final response = await http
           .post(uri, headers: _headers, body: jsonEncode(body))
-          .timeout(const Duration(seconds: 15));
+          .timeout(const Duration(seconds: 30));
       return _handleResponse(response);
     } on SocketException {
-      throw const ApiException(503, 'Sin conexión al servidor');
+      throw const ApiException(503, 'Sin conexión al servidor. ¿Está XAMPP encendido?');
+    } catch (e) {
+      if (e.toString().contains('TimeoutException')) {
+        throw const ApiException(504, 'El servidor tardó demasiado en responder. Verifica que XAMPP esté funcionando.');
+      }
+      throw ApiException(503, 'Error de red: $e');
     }
   }
 

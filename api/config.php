@@ -5,28 +5,29 @@
 // ══════════════════════════════════════════════════════════════
 
 // Cambia entre 'local' y 'remote'
-define('APP_ENV', 'remote');
+define('APP_ENV', 'local');
 
 // ── Configuración según entorno ──────────────────────────────
 if (APP_ENV === 'local') {
-    define('DB_HOST', 'localhost');
-    define('DB_NAME', 'joinBD2026');
-    define('DB_USER', 'root');
-    define('DB_PASS', '');
-    define('DB_CHARSET', 'utf8mb4');
-
-    // XAMPP local desde emulador Android
-    define('BASE_URL', 'http://10.0.2.2/join/api');
-} else {
-    // BD online
-    define('DB_HOST', '148.113.206.59'); // usa este solo si tu hosting te dio este IP como host MySQL
+    // BD en la nube (vitalifeperu.com)
+    define('DB_HOST', '148.113.206.59');
     define('DB_NAME', 'vitalife_join');
     define('DB_USER', 'vitalife_nelson');
     define('DB_PASS', 'T1Vsbd8+GSFgF4zy');
     define('DB_CHARSET', 'utf8mb4');
 
-    // Tu backend sigue local en XAMPP
+    // XAMPP local desde emulador Android (archivos PHP locales)
     define('BASE_URL', 'http://10.0.2.2/join/api');
+} else {
+    // Para producción futura cuando subas los archivos PHP al servidor
+    define('DB_HOST', '148.113.206.59');
+    define('DB_NAME', 'vitalife_join');
+    define('DB_USER', 'vitalife_nelson');
+    define('DB_PASS', 'T1Vsbd8+GSFgF4zy');
+    define('DB_CHARSET', 'utf8mb4');
+
+    // Backend online en vitalifeperu.com
+    define('BASE_URL', 'https://vitalifeperu.com/api');
 }
 
 // Devuelve siempre JSON

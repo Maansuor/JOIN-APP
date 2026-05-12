@@ -230,10 +230,13 @@ class AppState extends ChangeNotifier {
     } on ApiException catch (e) {
       _error = e.message;
       _setLoading(false);
+      debugPrint('Google Sign-In API Error: ${e.message}');
       return false;
-    } catch (e) {
+    } catch (e, stackTrace) {
       _error = 'Error con Google Sign-In: $e';
       _setLoading(false);
+      debugPrint('Google Sign-In Error: $e');
+      debugPrint('Stack trace: $stackTrace');
       return false;
     }
   }

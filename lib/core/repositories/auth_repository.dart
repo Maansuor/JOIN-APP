@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 import '../models/user_model.dart';
@@ -78,32 +79,48 @@ class AuthRepository {
   /// y lo valida con nuestro backend PHP (sin Firebase).
   /// Retorna null si el usuario cancela el flujo.
   Future<AuthResult?> loginWithGoogle() async {
-    // 1. Abre el popup de cuentas Google
-    final account = await _googleSignIn.signIn();
-    if (account == null) return null; // usuario canceló
+    try {
+      // 1. Abre el popup de cuentas Google
+      debugPrint('Google Sign-In: Iniciando flujo...');
+      final account = await _googleSignIn.signIn();
+      if (account == null) {
+        debugPrint('Google Sign-In: Usuario canceló');
+        return null; // usuario canceló
+      }
 
-    // 2. Obtener credenciales con el idToken
-    final auth = await account.authentication;
-    final idToken = auth.idToken;
+      debugPrint('Google Sign-In: Cuenta seleccionada: ${account.email}');
 
-    if (idToken == null) {
-      throw const ApiException(401, 'No se pudo obtener el token de Google');
+      // 2. Obtener credenciales con el idToken
+      final auth = await account.authentication;
+      final idToken = auth.idToken;
+
+      if (idToken == null) {
+        debugPrint('Google Sign-In: idToken es null');
+        throw const ApiException(401, 'No se pudo obtener el token de Google');
+      }
+
+      debugPrint('Google Sign-In: idToken obtenido correctamente');
+
+      // 3. Enviar idToken al backend PHP para verificar y crear sesión
+      final data = await _api.post('/auth.php', {
+        'idToken': idToken,
+      }, queryParams: {
+        'action': 'google_auth'
+      });
+
+      final token = data['token'] as String;
+      _api.setToken(token);
+
+      debugPrint('Google Sign-In: Sesión creada exitosamente');
+
+      return AuthResult(
+        token: token,
+        user: UserModel.fromJson(data['user'] as Map<String, dynamic>),
+      );
+    } catch (e) {
+      debugPrint('Google Sign-In Error: $e');
+      rethrow;
     }
-
-    // 3. Enviar idToken al backend PHP para verificar y crear sesión
-    final data = await _api.post('/auth.php', {
-      'idToken': idToken,
-    }, queryParams: {
-      'action': 'google_auth'
-    });
-
-    final token = data['token'] as String;
-    _api.setToken(token);
-
-    return AuthResult(
-      token: token,
-      user: UserModel.fromJson(data['user'] as Map<String, dynamic>),
-    );
   }
 
   // ── Logout ──────────────────────────────────────────────────
