@@ -467,7 +467,7 @@ class _SocialPanel extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      'Elige cómo quieres continuar',
+                      'Inicia sesión con tu cuenta de Google',
                       style: TextStyle(
                         fontSize: 14,
                         color: AppColors.navyBlue.withValues(alpha: 0.5),
@@ -506,21 +506,19 @@ class _SocialPanel extends StatelessWidget {
                 .fadeIn(duration: 400.ms, delay: 100.ms)
                 .slideY(begin: 0.15, curve: Curves.easeOutCubic),
 
-            const SizedBox(height: 12),
-
-            // Email
-            _SocialButton(
-              icon: Icons.email_rounded,
-              label: 'Continuar con correo',
-              color: AppColors.navyBlue,
-              bgColor: AppColors.navyBlue.withValues(alpha: 0.06),
-              accentColor: AppColors.navyBlue,
-              onTap: onEmail,
-              isMaterial: true,
-            )
-                .animate()
-                .fadeIn(duration: 400.ms, delay: 250.ms)
-                .slideY(begin: 0.15, curve: Curves.easeOutCubic),
+            // Email - Ocultado temporalmente hasta tener dominio para magic link
+            // _SocialButton(
+            //   icon: Icons.email_rounded,
+            //   label: 'Continuar con correo',
+            //   color: AppColors.navyBlue,
+            //   bgColor: AppColors.navyBlue.withValues(alpha: 0.06),
+            //   accentColor: AppColors.navyBlue,
+            //   onTap: onEmail,
+            //   isMaterial: true,
+            // )
+            //     .animate()
+            //     .fadeIn(duration: 400.ms, delay: 250.ms)
+            //     .slideY(begin: 0.15, curve: Curves.easeOutCubic),
 
             const SizedBox(height: 20),
 
