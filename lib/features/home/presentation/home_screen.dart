@@ -61,7 +61,16 @@ class _HomeScreenState extends State<HomeScreen> {
           }).toList()
         : effectiveCategory == 'Todos'
             ? allActivities
-            : allActivities.where((a) => a.category.trim().toLowerCase() == effectiveCategory.toLowerCase()).toList();
+            : allActivities.where((a) {
+                // Si la categoría seleccionada es una de las categorías principales de la BD
+                final mainCategories = ['Deportes', 'Comida', 'Naturaleza', 'Chill', 'Juntas', 'Arte', 'Música', 'Otro'];
+                if (mainCategories.contains(effectiveCategory)) {
+                  return a.category.trim().toLowerCase() == effectiveCategory.toLowerCase();
+                }
+                // Si es una subcategoría (Running, Trekking, etc.), usar InterestMapper
+                final relatedCategories = InterestMapper.getCategoriesForInterests([effectiveCategory]);
+                return relatedCategories.any((cat) => a.category.trim().toLowerCase() == cat.toLowerCase());
+              }).toList();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FB),
