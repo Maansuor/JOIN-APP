@@ -4,7 +4,7 @@
 --  usuarios existentes que no tienen fila todavía.
 -- ══════════════════════════════════════════════════════════════
 
-USE `joinBD2026`;
+USE `vitalife_join`;
 
 -- 1. Crear tabla si no existe
 CREATE TABLE IF NOT EXISTS `profile_setup_progress` (

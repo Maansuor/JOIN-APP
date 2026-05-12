@@ -4,6 +4,8 @@
 --  Compatibilidad con profile.php que actualiza u.phone
 -- ══════════════════════════════════════════════════════════════
 
+USE `vitalife_join`;
+
 -- 1. Añadir columna phone a users (si no existe)
 ALTER TABLE users
   ADD COLUMN IF NOT EXISTS phone VARCHAR(20) NULL AFTER email;

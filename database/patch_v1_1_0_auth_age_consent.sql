@@ -1,13 +1,13 @@
 -- ============================================================
---  joinBD2026 — PATCH v1.1.0
+--  vitalife_join — PATCH v1.1.0
 --  Autenticación OAuth + Edad + Consentimiento de datos
 --  Fecha: 2026-02-24
 --
---  EJECUTAR EN ORDEN sobre la BD ya existente joinBD2026
+--  EJECUTAR EN ORDEN sobre la BD ya existente vitalife_join
 --  (No re-importa todo el schema, solo añade lo nuevo)
 -- ============================================================
 
-USE `joinBD2026`;
+USE `vitalife_join`;
 
 SET FOREIGN_KEY_CHECKS = 0;
 
