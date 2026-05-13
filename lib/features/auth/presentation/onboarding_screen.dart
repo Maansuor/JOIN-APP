@@ -682,7 +682,22 @@ class _StepLocation extends StatelessWidget {
               ],
             )
           else
-            _SuccessBanner(accent: accent, text: 'Obteniendo ubicación...'),
+            Column(
+              children: [
+                _SuccessBanner(accent: accent, text: 'No se pudo detectar tu ciudad'),
+                const SizedBox(height: 12),
+                _StoryButton(
+                  label: 'Seleccionar en mapa',
+                  icon: Icons.map_rounded,
+                  accent: accent,
+                  onTap: () {
+                    // TODO: Implementar selector de mapa
+                    // Por ahora, usar una ciudad por defecto
+                    onConfirm();
+                  },
+                ),
+              ],
+            ),
 
           const Spacer(),
         ],
