@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -48,6 +49,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
   // ── Data de cada paso ─────────────────────────────────────
   bool _locationGranted = false;
+  String? _detectedCity;
   DateTime? _birthDate;
   UserGender _gender = UserGender.preferNotToSay;
   final Set<String> _interests = {};
@@ -99,14 +101,9 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     if (locPerm == LocationPermission.always ||
         locPerm == LocationPermission.whileInUse) {
       setState(() => _locationGranted = true);
-      // Obtener la ubicación en background sin bloquear el flujo
+      // Obtener la ubicación y ciudad en background sin bloquear el flujo
       _fetchCurrentLocation();
-      // Auto-avanzar después de un breve delay para que el usuario
-      // vea la confirmación visual (si estamos en el paso 0)
-      if (_step == 0) {
-        await Future.delayed(const Duration(milliseconds: 1200));
-        if (mounted && _step == 0) _advance();
-      }
+      // NO auto-avanzar - esperar confirmación del usuario
     }
     // Notificaciones
     final notifStatus = await Permission.notification.status;
@@ -123,8 +120,27 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       ).timeout(const Duration(seconds: 8));
       debugPrint(
           '📍 Ubicación capturada: ${position.latitude}, ${position.longitude}');
-      if (mounted) {
-        context.read<AppState>().updatePosition(position);
+      
+      // Obtener ciudad con timeout
+      try {
+        List<Placemark> placemarks = await placemarkFromCoordinates(
+          position.latitude, 
+          position.longitude
+        ).timeout(const Duration(seconds: 5));
+        
+        if (placemarks.isNotEmpty) {
+          final city = placemarks.first.locality ?? placemarks.first.subAdministrativeArea ?? 'Ubicación detectada';
+          if (mounted) {
+            setState(() => _detectedCity = city);
+            context.read<AppState>().updatePosition(position);
+          }
+        }
+      } on TimeoutException {
+        debugPrint('⏱️ Timeout geocoding - usando coordenadas sin ciudad');
+        if (mounted) {
+          setState(() => _detectedCity = 'Ubicación detectada');
+          context.read<AppState>().updatePosition(position);
+        }
       }
     } on TimeoutException {
       debugPrint('⏱️ Timeout GPS — intentando última posición conocida...');
@@ -132,6 +148,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         final last = await Geolocator.getLastKnownPosition();
         if (last != null && mounted) {
           context.read<AppState>().updatePosition(last);
+          setState(() => _detectedCity = 'Última ubicación conocida');
         }
       } catch (_) {}
     } catch (e) {
@@ -163,9 +180,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       setState(() => _locationGranted = true);
       // Obtener ubicación en background sin bloquear
       _fetchCurrentLocation().ignore();
-      // Auto-avanzar al siguiente paso tras un breve delay visual
-      await Future.delayed(const Duration(milliseconds: 900));
-      if (mounted && _step == 0) _advance();
+      // NO auto-avanzar - esperar confirmación del usuario
     }
   }
 
@@ -194,7 +209,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   bool get _stepReady {
     switch (_step) {
       case 0:
-        return true; // La ubicación es opcional — puede omitirse
+        // La ubicación es opcional — puede omitirse o confirmar ciudad detectada
+        return true;
       case 1:
         return _birthDate != null && _isAdult;
       case 2:
@@ -364,7 +380,9 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                         accent: cfg.accent,
                         icon: _steps[0].icon,
                         granted: _locationGranted,
+                        detectedCity: _detectedCity,
                         onGranted: _requestLocation, // ← permiso real del SO
+                        onConfirm: _advance, // ← confirmar ubicación y avanzar
                       ),
                       _StepBirthDate(
                         accent: _steps[1].accent,
@@ -425,17 +443,18 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   }
 
   Widget _buildCTA(_StepConfig cfg) {
-    // Paso 0 (ubicación): siempre muestra el botón para no dejar al usuario atascado
+    // Paso 0 (ubicación): muestra botón solo si no tiene ciudad detectada (puede omitir)
+    // Si tiene ciudad detectada, el botón de confirmar está en el paso
     // Pasos 1, 2, 4: auto-avance (no necesitan botón)
     final autoSteps = {1, 2, 4};
     if (autoSteps.contains(_step)) {
       return const SizedBox.shrink();
     }
 
-    // Paso 0 (ubicación): siempre visible — el usuario puede omitir aunque no dé permiso
+    // Paso 0 (ubicación): visible solo si no hay ciudad detectada (puede omitir)
     // Paso 3 (intereses): siempre visible
     // Paso 4 (notificaciones): visible si no auto-avanzó
-    final show = _step == 0 || _step == 3 || (_step == 4 && !_notifGranted);
+    final show = (_step == 0 && _detectedCity == null) || _step == 3 || (_step == 4 && !_notifGranted);
     if (!show) return const SizedBox.shrink();
 
     final ready = _stepReady;
@@ -559,13 +578,17 @@ class _StepLocation extends StatelessWidget {
   final Color accent;
   final IconData icon;
   final bool granted;
+  final String? detectedCity;
   final VoidCallback onGranted;
+  final VoidCallback onConfirm;
 
   const _StepLocation(
       {required this.accent,
       required this.icon,
       required this.granted,
-      required this.onGranted});
+      required this.detectedCity,
+      required this.onGranted,
+      required this.onConfirm});
 
   @override
   Widget build(BuildContext context) {
@@ -623,8 +646,43 @@ class _StepLocation extends StatelessWidget {
               accent: accent,
               onTap: onGranted,
             )
+          else if (detectedCity != null)
+            Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: accent.withValues(alpha: 0.3)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.location_city_rounded, color: accent, size: 24),
+                      const SizedBox(width: 12),
+                      Text(
+                        detectedCity!,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ).animate().scale(curve: Curves.elasticOut),
+                const SizedBox(height: 16),
+                _StoryButton(
+                  label: 'Confirmar ubicación',
+                  icon: Icons.check_circle_rounded,
+                  accent: accent,
+                  onTap: onConfirm,
+                ),
+              ],
+            )
           else
-            _SuccessBanner(accent: accent, text: '¡Ubicación lista!'),
+            _SuccessBanner(accent: accent, text: 'Obteniendo ubicación...'),
 
           const Spacer(),
         ],
