@@ -131,11 +131,19 @@ class AppState extends ChangeNotifier {
         notifyListeners();
         await _loadActivities();
       } else {
+        // Token inválido (401), borrarlo
         await prefs.remove('auth_token');
       }
+    } on ApiException catch (e) {
+      debugPrint('Restore session API error: ${e.message}');
+      // Solo borrar el token si es 401 (no autorizado)
+      if (e.statusCode == 401) {
+        await prefs.remove('auth_token');
+      }
+      // Si es error de red (503, 504, etc.), mantener el token para reintentar
     } catch (e) {
       debugPrint('Restore session error: $e');
-      // Token expirado o red no disponible
+      // Error de red u otro, mantener el token para reintentar
     }
   }
 

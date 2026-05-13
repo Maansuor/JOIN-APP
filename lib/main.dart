@@ -45,7 +45,7 @@ class _JoinAppState extends State<JoinApp> {
 
   GoRouter _buildRouter() {
     return GoRouter(
-      initialLocation: '/login',
+      initialLocation: null, // Dejar que el redirect decida a dónde ir basado en la sesión
       // Escucha cambios en AppState para el redirect
       refreshListenable: context.read<AppState>(),
       redirect: (context, state) {
