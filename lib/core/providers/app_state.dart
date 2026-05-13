@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
@@ -63,10 +65,11 @@ class AppState extends ChangeNotifier {
     _currentPosition = pos;
     notifyListeners();
 
-    // Detectar ciudad automáticamente
+    // Detectar ciudad automáticamente con timeout
     try {
       List<Placemark> placemarks =
-          await placemarkFromCoordinates(pos.latitude, pos.longitude);
+          await placemarkFromCoordinates(pos.latitude, pos.longitude)
+              .timeout(const Duration(seconds: 5));
       if (placemarks.isNotEmpty) {
         final city = placemarks.first.locality;
         if (city != null && city != _currentCity) {
@@ -77,6 +80,8 @@ class AppState extends ChangeNotifier {
           notifyListeners();
         }
       }
+    } on TimeoutException {
+      debugPrint('⏱️ Timeout en geocoding - usando ciudad anterior');
     } catch (e) {
       debugPrint('Error en geocoding: $e');
     }
