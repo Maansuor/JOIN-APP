@@ -1,12 +1,8 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -20,6 +16,7 @@ import '../repositories/activity_repository.dart';
 import '../repositories/clan_repository.dart';
 import '../repositories/supabase_clan_repository.dart';
 import '../location/peru_geography.dart';
+import '../location/location_tracker.dart';
 
 // ══════════════════════════════════════════════════════════════
 //  AppState  — Estado global conectado a Supabase
@@ -30,7 +27,7 @@ import '../location/peru_geography.dart';
 //  ✅ solicitudes de unión vía Supabase
 //  Compatible con la UI existente (misma interfaz pública)
 // ══════════════════════════════════════════════════════════════
-class AppState extends ChangeNotifier with WidgetsBindingObserver {
+class AppState extends ChangeNotifier {
   // ─── Repositorios ─────────────────────────────────────────────────────────
 
   final AuthRepository _authRepo;
@@ -44,9 +41,14 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     AuthRepository? authRepo,
     ActivityRepository? activityRepo,
     ClanRepository? clanRepo,
+    LocationTracker? locationTracker,
   })  : _authRepo = authRepo ?? AuthRepository(),
         _activityRepo = activityRepo ?? SupabaseActivityRepository(),
-        _clanRepo = clanRepo ?? SupabaseClanRepository() {
+        _clanRepo = clanRepo ?? SupabaseClanRepository(),
+        _location = locationTracker ?? LocationTracker() {
+    // Los cambios de ubicación se propagan a las pantallas que escuchan AppState.
+    _location.addListener(notifyListeners);
+    _location.onMarkedCityChanged = _syncUserCityToBackend;
     _init();
   }
 
@@ -55,14 +57,9 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> _init() async {
     try {
-      WidgetsBinding.instance.addObserver(this);
-      await GeocodingPlatform.instance?.setLocaleIdentifier("es_PE").catchError((e) {
-        debugPrint('⚠️ No se pudo establecer el locale de geocoding: $e');
-      });
+      await _location.restore();
+
       final prefs = await SharedPreferences.getInstance();
-      _searchRadius = prefs.getDouble('search_radius') ?? 0.0;
-      _currentCity = prefs.getString('last_known_city');
-      
       if (prefs.containsKey('is_dark_mode')) {
         _isDarkMode = prefs.getBool('is_dark_mode') ?? false;
       } else {
@@ -96,387 +93,75 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   String? _error;
   bool _isInitialized = false;
 
-  Position? _currentPosition;
-  Position? get currentPosition => _currentPosition;
-  String? _currentCity;
-  String? get currentCity => _currentCity;
+  // ─── Ubicación (delegada en LocationTracker) ──────────────────────────────
+  //
+  // El seguimiento de GPS y la geocodificación viven en LocationTracker; aquí
+  // sólo se reexponen para que las pantallas sigan hablando con AppState.
 
-  double _searchRadius = 0.0; // 0.0 significa filtro estricto por ciudad
-  double get searchRadius => _searchRadius;
+  final LocationTracker _location;
+  LocationTracker get location => _location;
 
-  // Nuevas variables para geolocalización en tiempo real y discrepancia
-  Position? _actualPosition;
-  Position? get actualPosition => _actualPosition;
-  String? _actualCity;
-  String? get actualCity => _actualCity;
-
-  String? _discrepancyCity;
-  String? get discrepancyCity => _discrepancyCity;
-  Position? _discrepancyPosition;
-  Position? get discrepancyPosition => _discrepancyPosition;
-  bool get hasLocationDiscrepancy => _discrepancyCity != null;
+  Position? get currentPosition => _location.currentPosition;
+  String? get currentCity => _location.currentCity;
+  Position? get actualPosition => _location.actualPosition;
+  String? get actualCity => _location.actualCity;
+  String? get discrepancyCity => _location.discrepancyCity;
+  Position? get discrepancyPosition => _location.discrepancyPosition;
+  bool get hasLocationDiscrepancy => _location.hasDiscrepancy;
+  double get searchRadius => _location.searchRadius;
 
   bool get isInitialized => _isInitialized;
 
-  StreamSubscription<Position>? _positionSubscription;
-  Timer? _locationTimer;
-  Position? _lastGeocodedPosition;
-
-  /// El usuario ya concedió permisos y quiere seguimiento activo. Se usa para
-  /// saber si hay que reanudar el rastreo al volver del segundo plano.
-  bool _locationTrackingRequested = false;
-
-  /// Metros que debe desplazarse el usuario para que el sistema operativo nos
-  /// entregue una nueva posición. Con esto el GPS no se consulta mientras el
-  /// usuario está quieto: es el SO quien nos despierta sólo si hay movimiento.
-  static const int _positionDistanceFilterMeters = 100;
-
-  /// Metros mínimos antes de volver a geocodificar. Un distrito no cambia en
-  /// 100 m, y Nominatim admite ~1 petición por segundo: geocodificar en cada
-  /// actualización de GPS sería desperdiciar red y arriesgar un bloqueo de IP.
-  static const double _geocodeThresholdMeters = 500;
-
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    _stopLocationUpdates();
+    _location.removeListener(notifyListeners);
+    _location.dispose();
     super.dispose();
   }
 
-  /// Sin app en pantalla no hay nada que actualizar: se corta el rastreo al
-  /// pasar a segundo plano y se reanuda al volver.
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (!_locationTrackingRequested) return;
-
-    if (state == AppLifecycleState.resumed) {
-      if (_positionSubscription == null && _locationTimer == null) {
-        _startPositionStream();
-      }
-    } else if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.detached) {
-      _stopLocationUpdates();
-    }
-  }
-
-  void updatePosition(Position pos) async {
-    _currentPosition = pos;
-    _actualPosition = pos;
-    notifyListeners();
-
-    // Detectar ciudad automáticamente con timeout
-    try {
-      String? city = await _reverseGeocode(pos.latitude, pos.longitude);
-      
-      // Fallback a geocodificador nativo
-      if (city == null || city.isEmpty) {
-        List<Placemark> placemarks =
-            await placemarkFromCoordinates(pos.latitude, pos.longitude)
-                .timeout(const Duration(seconds: 4));
-        if (placemarks.isNotEmpty) {
-          city = placemarks.first.locality;
-        }
-      }
-
-      if (city != null && city.isNotEmpty) {
-        _actualCity = city;
-        if (city != _currentCity) {
-          final oldCity = _currentCity;
-          _currentCity = city;
-          debugPrint('🌆 Nueva ciudad detectada: $city (antes: $oldCity)');
-          _saveLastCity(city);
-          notifyListeners();
-        }
-      }
-    } on TimeoutException {
-      debugPrint('⏱️ Timeout en geocoding - usando ciudad anterior');
-    } catch (e) {
-      debugPrint('Error en geocoding: $e');
-    }
-  }
-
-  /// Limpia el estado de discrepancia de ubicación (por ejemplo si el usuario descarta la alerta)
-  void clearDiscrepancy() {
-    _discrepancyCity = null;
-    _discrepancyPosition = null;
-    _lastGeocodedPosition = null; // Forzar re-evaluación inmediata física
-    notifyListeners();
-  }
-
-  /// Método de geocodificación inversa resiliente usando OpenStreetMap Nominatim
-  Future<String?> _reverseGeocode(double lat, double lon) async {
-    try {
-      final url = Uri.parse('https://nominatim.openstreetmap.org/reverse?format=json&lat=$lat&lon=$lon&accept-language=es');
-      final response = await http.get(url, headers: {
-        'User-Agent': 'JoinApp-LocalDev',
-      }).timeout(const Duration(seconds: 4));
-      
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        final address = data['address'];
-        if (address != null) {
-          final district = address['suburb'] ?? address['village'] ?? address['neighborhood'] ?? address['town'] ?? '';
-          String cityOrRegion = address['city'] ?? address['county'] ?? '';
-          if (cityOrRegion.isEmpty || cityOrRegion == district) {
-            cityOrRegion = address['state'] ?? '';
-          }
-          String finalCity = '';
-          if (district.isNotEmpty && cityOrRegion.isNotEmpty && district != cityOrRegion) {
-            finalCity = '$district, $cityOrRegion';
-          } else {
-            finalCity = district.isNotEmpty ? district : cityOrRegion;
-          }
-          if (finalCity.isNotEmpty) return finalCity;
-        }
-      }
-    } catch (e) {
-      debugPrint('Resilient Geocoding Error in AppState: $e');
-    }
-    return null;
-  }
-
-  /// Procesa la posición recibida y realiza la geocodificación inversa y detección de discrepancia
-  Future<void> _handleLivePositionUpdate(Position pos) async {
-    try {
-      _actualPosition = pos;
-
-      // Calcular la distancia desde la última posición geocodificada para evitar inundar los servidores de geocodificación
-      if (_lastGeocodedPosition != null) {
-        final distance = Geolocator.distanceBetween(
-          _lastGeocodedPosition!.latitude,
-          _lastGeocodedPosition!.longitude,
-          pos.latitude,
-          pos.longitude,
-        );
-        // Desplazamiento corto: no hace falta volver a preguntar la ciudad.
-        if (distance < _geocodeThresholdMeters &&
-            _actualCity != null &&
-            _actualCity!.isNotEmpty) {
-          // Aun así refrescamos la posición para que el orden por cercanía de
-          // las actividades siga siendo exacto.
-          if (_discrepancyCity == null) _currentPosition = pos;
-          return;
-        }
-      }
-
-      String? city;
-
-      // 1. Intentar geocodificación resiliente usando OpenStreetMap Nominatim con idioma español
-      city = await _reverseGeocode(pos.latitude, pos.longitude);
-
-      // 2. Fallback a geocodificación nativa si Nominatim falló
-      if (city == null || city.isEmpty) {
-        try {
-          List<Placemark> placemarks = await placemarkFromCoordinates(pos.latitude, pos.longitude)
-              .timeout(const Duration(seconds: 5));
-          if (placemarks.isNotEmpty) {
-            final p = placemarks.first;
-
-            String district = p.subLocality ?? '';
-            if (district.isEmpty) {
-              district = p.locality ?? '';
-            }
-            
-            String cityOrRegion = p.subAdministrativeArea ?? '';
-            if (cityOrRegion.isEmpty || cityOrRegion == district) {
-              cityOrRegion = p.administrativeArea ?? '';
-            }
-            
-            if (district.isNotEmpty && cityOrRegion.isNotEmpty && district != cityOrRegion) {
-              city = '$district, $cityOrRegion';
-            } else {
-              city = district.isNotEmpty ? district : cityOrRegion;
-            }
-          }
-        } catch (geocodingErr) {
-          debugPrint('📍 _handleLivePositionUpdate: Geocodificación nativa falló: $geocodingErr');
-        }
-      }
-      
-      if (city != null && city.isNotEmpty) {
-        _lastGeocodedPosition = pos;
-        _actualCity = city;
-
-        if (_currentCity == null || _currentCity!.isEmpty) {
-          debugPrint('📍 Primera ciudad detectada: $city');
-          _currentCity = city;
-          _currentPosition = pos;
-          await _saveLastCity(city);
-          notifyListeners();
-          return;
-        }
-
-        final cleanMarked = _currentCity!.toLowerCase().trim();
-        final cleanActual = city.toLowerCase().trim();
-        
-        if (cleanMarked != cleanActual) {
-          // Ignorar la ubicación por defecto del emulador "Mountain View" para no molestar en desarrollo local
-          if (cleanActual == 'mountain view') {
-            _discrepancyCity = null;
-            _discrepancyPosition = null;
-            notifyListeners();
-            return;
-          }
-
-          _discrepancyCity = city;
-          _discrepancyPosition = pos;
-          debugPrint('⚠️ Discrepancia de ubicación detectada: Marcada=$_currentCity, Real=$city');
-          notifyListeners();
-        } else {
-          _discrepancyCity = null;
-          _discrepancyPosition = null;
-          _currentPosition = pos; // Actualizar coordenadas para cálculos exactos
-          notifyListeners();
-        }
-      }
-    } catch (e) {
-      debugPrint('📍 Error en _handleLivePositionUpdate: $e');
-    }
-  }
-
   /// Arranca el seguimiento de ubicación en tiempo real.
-  ///
-  /// Usa el stream nativo de geolocator con `distanceFilter` en lugar de
-  /// sondear el GPS en bucle: el sistema operativo sólo nos entrega una
-  /// posición cuando el usuario se ha desplazado de verdad. Si está quieto no
-  /// se gasta batería; si se mueve, la actualización llega de inmediato.
-  Future<void> checkLocationAndDetectDiscrepancy() async {
-    if (_positionSubscription != null || _locationTimer != null) return;
+  Future<void> checkLocationAndDetectDiscrepancy() => _location.start();
 
-    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      debugPrint('📍 Servicio de ubicación desactivado.');
-      return;
-    }
+  /// Aplica una posición elegida fuera del stream (por ejemplo en el mapa).
+  void updatePosition(Position pos) => _location.applyPosition(pos);
 
-    LocationPermission permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-    }
-    if (permission == LocationPermission.denied ||
-        permission == LocationPermission.deniedForever) {
-      debugPrint('📍 Permiso de ubicación no concedido: $permission');
-      return;
-    }
+  /// Descarta la alerta de discrepancia sin cambiar de ciudad.
+  void clearDiscrepancy() => _location.clearDiscrepancy();
 
-    _locationTrackingRequested = true;
-    _startPositionStream();
-  }
-
-  void _startPositionStream() {
-    // Posición inicial inmediata: el stream sólo emite tras el primer
-    // desplazamiento, así que sin esto la app no sabría dónde está al abrir.
-    Geolocator.getLastKnownPosition().then(
-      (pos) {
-        if (pos != null) _handleLivePositionUpdate(pos);
-      },
-      onError: (e) => debugPrint('📍 Sin última posición conocida: $e'),
-    );
-
-    final LocationSettings settings = (!kIsWeb && Platform.isAndroid)
-        ? AndroidSettings(
-            accuracy: LocationAccuracy.high,
-            distanceFilter: _positionDistanceFilterMeters,
-            // Mantiene el LocationManager nativo en lugar de Play Services:
-            // evita el DeadSystemException/JNI crash del GPS simulado en
-            // ciertos emuladores, que fue el motivo del bucle manual previo.
-            forceLocationManager: true,
-            intervalDuration: const Duration(seconds: 30),
-          )
-        : const LocationSettings(
-            accuracy: LocationAccuracy.high,
-            distanceFilter: _positionDistanceFilterMeters,
-          );
-
-    _positionSubscription = Geolocator.getPositionStream(locationSettings: settings).listen(
-      _handleLivePositionUpdate,
-      onError: (e) {
-        debugPrint('⚠️ Stream de ubicación falló ($e). Se pasa a sondeo lento.');
-        _positionSubscription?.cancel();
-        _positionSubscription = null;
-        _startFallbackPolling();
-      },
-      cancelOnError: false,
-    );
-    debugPrint('📍 Seguimiento por stream activo (cada ${_positionDistanceFilterMeters}m).');
-  }
-
-  /// Plan B por si el stream nativo no funciona en un dispositivo concreto.
-  /// Dos minutos basta para detectar un cambio de ciudad y no castiga la
-  /// batería como el sondeo de 4 segundos que había antes.
-  void _startFallbackPolling() {
-    _locationTimer?.cancel();
-    _locationTimer = Timer.periodic(const Duration(minutes: 2), (_) async {
-      try {
-        final pos = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.medium,
-          forceAndroidLocationManager: true,
-        ).timeout(const Duration(seconds: 15));
-        await _handleLivePositionUpdate(pos);
-      } catch (e) {
-        debugPrint('📍 Sondeo de ubicación falló: $e');
-      }
-    });
-  }
-
-  void _stopLocationUpdates() {
-    _positionSubscription?.cancel();
-    _positionSubscription = null;
-    _locationTimer?.cancel();
-    _locationTimer = null;
-  }
-
-  /// Actualiza la ciudad marcada por el usuario y sus coordenadas de referencia "en caliente"
+  /// Fija la ciudad elegida por el usuario y recarga las actividades de la zona.
   Future<void> updateSelectedCity(String city, Position position) async {
-    _currentCity = city;
-    _currentPosition = position;
-    _actualCity = city;
-    _actualPosition = position;
-    _discrepancyCity = null;
-    _discrepancyPosition = null;
-    _lastGeocodedPosition = null; // Forzar re-evaluación inmediata física
-    _activitiesLoaded = false; // Reset para forzar recarga visual
-    _activities = []; // Limpiar para evitar parpadeo de datos viejos
-    _isLoading = true; // Evitar parpadeo/flash del estado vacío de la lista
-    
-    await _saveLastCity(city);
+    await _location.selectCity(city, position);
+
+    _activitiesLoaded = false; // Forzar recarga
+    _activities = []; // Evitar que parpadeen las de la ciudad anterior
+    _isLoading = true; // Evitar el flash del estado vacío
     notifyListeners();
-    
-    // Forzar recarga de actividades para traer las correspondientes a la nueva ciudad
+
     Future.microtask(() => loadActivities(force: true)).catchError((e) {
       debugPrint('Error al recargar actividades tras cambio de ubicación: $e');
     });
   }
 
-  /// Actualiza el rango de búsqueda en kilómetros y recarga actividades
+  /// Cambia el radio de búsqueda en kilómetros y recarga las actividades.
   Future<void> updateSearchRadius(double radius) async {
-    _searchRadius = radius;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setDouble('search_radius', radius);
-    notifyListeners();
+    await _location.setSearchRadius(radius);
     await loadActivities(force: true);
   }
 
-  Future<void> _syncUserCityToBackend() async {
+  /// Guarda en el perfil la ciudad actual, para que el backend pueda usarla.
+  Future<void> _syncUserCityToBackend(String city) async {
     final userId = _currentUser?.id;
-    final city = _currentCity;
-    if (userId == null || userId.isEmpty || city == null || city.isEmpty) return;
+    if (userId == null || userId.isEmpty || city.isEmpty) return;
 
     try {
       await Supabase.instance.client
           .from('profiles')
           .update({'current_city': city})
           .eq('id', userId);
-      debugPrint('📍 Ciudad sincronizada en Supabase para el usuario: $city');
+      debugPrint('📍 Ciudad sincronizada en Supabase: $city');
     } catch (e) {
       debugPrint('⚠️ Error al sincronizar ciudad en Supabase: $e');
     }
-  }
-
-  Future<void> _saveLastCity(String city) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('last_known_city', city);
-    _syncUserCityToBackend(); // Sincronizar asíncronamente con Supabase
   }
 
   UserModel? get currentUser => _currentUser;
@@ -519,9 +204,10 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       final user = await _authRepo.restoreSession(token);
       if (user != null) {
         _currentUser = user;
-        _currentCity = prefs.getString('last_known_city'); // Restaurar ciudad
         notifyListeners();
-        _syncUserCityToBackend(); // Sincronizar ciudad recuperada
+        // La ciudad ya la restauró LocationTracker; aquí sólo se sincroniza
+        // con el perfil, que necesita el usuario ya cargado.
+        if (currentCity != null) _syncUserCityToBackend(currentCity!);
         await _loadActivities();
         await loadUserClans(); // Cargar clanes del usuario
       } else {
@@ -562,7 +248,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       final result = await _authRepo.login(username, password);
       _currentUser = result.user;
       await _saveToken(result.token);
-      _syncUserCityToBackend(); // Sincronizar ubicación tras login
+      if (currentCity != null) _syncUserCityToBackend(currentCity!);
       _setLoading(false);
       // Cargar actividades y clanes en background
       Future.microtask(_loadActivities).catchError((_) {});
@@ -598,7 +284,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       );
       _currentUser = result.user;
       await _saveToken(result.token);
-      _syncUserCityToBackend(); // Sincronizar ubicación tras registro
+      if (currentCity != null) _syncUserCityToBackend(currentCity!);
       _setLoading(false);
       // Cargar actividades y clanes en background
       Future.microtask(_loadActivities).catchError((_) {});
@@ -629,7 +315,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       }
       _currentUser = result.user;
       await _saveToken(result.token);
-      _syncUserCityToBackend(); // Sincronizar ubicación tras Google login
+      if (currentCity != null) _syncUserCityToBackend(currentCity!);
       _setLoading(false);
       // Cargar actividades y clanes en background
       Future.microtask(_loadActivities).catchError((_) {});
@@ -679,7 +365,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       final result = await _authRepo.verifyMagicCode(email, code);
       _currentUser = result.user;
       await _saveToken(result.token);
-      _syncUserCityToBackend(); // Sincronizar ubicación tras Magic Code login
+      if (currentCity != null) _syncUserCityToBackend(currentCity!);
       _setLoading(false);
       // Cargar actividades y clanes en background
       Future.microtask(_loadActivities).catchError((_) {});
@@ -857,29 +543,29 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     try {
       final fetched = await _activityRepo.getActivities(
         category: category, 
-        city: _searchRadius > 0 ? null : _currentCity,
+        city: searchRadius > 0 ? null : currentCity,
       );
       
       List<Activity> processed = fetched;
-      if (_searchRadius > 0) {
+      if (searchRadius > 0) {
         processed = fetched.where((a) {
           // Si es su propia actividad, siempre mostrarla
           if (a.organizerId == _currentUser?.id) return true;
           
           // Si tiene coordenadas y el usuario también, calcular distancia real
-          if (a.latitude != null && a.longitude != null && _currentPosition != null) {
+          if (a.latitude != null && a.longitude != null && currentPosition != null) {
             final distMeters = Geolocator.distanceBetween(
-              _currentPosition!.latitude,
-              _currentPosition!.longitude,
+              currentPosition!.latitude,
+              currentPosition!.longitude,
               a.latitude!,
               a.longitude!,
             );
             final distKm = distMeters / 1000.0;
-            return distKm <= _searchRadius;
+            return distKm <= searchRadius;
           }
           
           // Si no hay posición del usuario, o no hay coordenadas de actividad, mostrarla sólo si pertenece a la misma región geográfica
-          return PeruGeography.proximityScore(_currentCity ?? '', a.city) < 100;
+          return PeruGeography.proximityScore(currentCity ?? '', a.city) < 100;
         }).toList();
       } else {
         // Filtrar de forma estricta para excluir actividades de ciudades/regiones distintas
@@ -888,14 +574,14 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
           if (a.organizerId == _currentUser?.id) return true;
           
           // Debe estar en el mismo grupo de proximidad geográfica (score < 100)
-          return PeruGeography.proximityScore(_currentCity ?? '', a.city) < 100;
+          return PeruGeography.proximityScore(currentCity ?? '', a.city) < 100;
         }).toList();
       }
 
       // Ordenar las actividades de forma inteligente según cercanía geográfica y lógica de distritos/provincias
       final myId = _currentUser?.id;
-      final userCity = _currentCity;
-      final userPos = _currentPosition;
+      final userCity = currentCity;
+      final userPos = currentPosition;
 
       processed.sort((a, b) {
         // 1. Prioridad máxima: Propias actividades del organizador (siempre arriba)
