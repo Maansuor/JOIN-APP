@@ -17,6 +17,7 @@ import '../repositories/clan_repository.dart';
 import '../repositories/supabase_clan_repository.dart';
 import '../location/peru_geography.dart';
 import '../location/location_tracker.dart';
+import '../services/notification_service.dart';
 
 // ══════════════════════════════════════════════════════════════
 //  AppState  — Estado global conectado a Supabase
@@ -210,6 +211,7 @@ class AppState extends ChangeNotifier {
       if (currentCity != null) _syncUserCityToBackend(currentCity!);
       await _loadActivities();
       await loadUserClans();
+      NotificationService.subscribeToRealtime();
     } on AuthException catch (e) {
       debugPrint('Restore session auth error: ${e.message}');
     } catch (e) {
@@ -239,6 +241,7 @@ class AppState extends ChangeNotifier {
       // Cargar actividades y clanes en background
       Future.microtask(_loadActivities).catchError((_) {});
       Future.microtask(loadUserClans).catchError((_) {});
+      NotificationService.subscribeToRealtime();
       return true;
     } on AuthException catch (e) {
       _error = e.message;
@@ -275,6 +278,7 @@ class AppState extends ChangeNotifier {
       // Cargar actividades y clanes en background
       Future.microtask(_loadActivities).catchError((_) {});
       Future.microtask(loadUserClans).catchError((_) {});
+      NotificationService.subscribeToRealtime();
       return true;
     } on AuthException catch (e) {
       _error = e.message;
@@ -306,6 +310,7 @@ class AppState extends ChangeNotifier {
       // Cargar actividades y clanes en background
       Future.microtask(_loadActivities).catchError((_) {});
       Future.microtask(loadUserClans).catchError((_) {});
+      NotificationService.subscribeToRealtime();
       return true;
     } on AuthException catch (e) {
       _error = e.message;
@@ -356,6 +361,7 @@ class AppState extends ChangeNotifier {
       // Cargar actividades y clanes en background
       Future.microtask(_loadActivities).catchError((_) {});
       Future.microtask(loadUserClans).catchError((_) {});
+      NotificationService.subscribeToRealtime();
       return true;
     } on AuthException catch (e) {
       _error = e.message;
@@ -380,6 +386,7 @@ class AppState extends ChangeNotifier {
     _acceptedActivityIds.clear();
     _activitiesLoaded = false;
     _error = null;
+    await NotificationService.unsubscribeFromRealtime();
     await _clearLegacyToken();
     notifyListeners();
   }

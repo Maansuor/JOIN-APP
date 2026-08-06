@@ -81,7 +81,109 @@ class NotificationService {
   static final ValueNotifier<int> unreadCount = ValueNotifier<int>(0);
 
   static final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
+
+  /// Ids ya avisados, para no repetir la alerta si la misma notificación llega
+  /// por Realtime y por una recarga manual.
   static final Set<String> _notifiedIds = {};
+
+  /// Tope del set anterior: sin él crecería sin límite mientras la app siga
+  /// abierta. Se conservan los más recientes, que son los que pueden repetirse.
+  static const int _maxRememberedIds = 200;
+
+  /// Canal de Realtime activo, si hay sesión.
+  static RealtimeChannel? _channel;
+
+  /// Escucha en vivo las notificaciones del usuario.
+  ///
+  /// Antes sólo se consultaban al abrir el inicio o la pantalla de
+  /// notificaciones: quien se quedaba en una pantalla no veía nada nuevo hasta
+  /// navegar a otra y volver. Ahora el badge y la alerta del sistema aparecen
+  /// en cuanto la fila se inserta en la base de datos.
+  static Future<void> subscribeToRealtime() async {
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null || userId.isEmpty) return;
+
+    await unsubscribeFromRealtime();
+
+    _channel = Supabase.instance.client
+        .channel('notifications:$userId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'notifications',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'user_id',
+            value: userId,
+          ),
+          callback: (payload) => _onNotificationInserted(payload.newRecord),
+        )
+        .onPostgresChanges(
+          // Mantiene el estado de leído en sincronía si se marca desde otro
+          // dispositivo o desde un trigger del backend.
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'notifications',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'user_id',
+            value: userId,
+          ),
+          callback: (payload) => _onNotificationUpdated(payload.newRecord),
+        )
+        .subscribe();
+
+    debugPrint('🔔 Notificaciones en vivo activas.');
+  }
+
+  static Future<void> unsubscribeFromRealtime() async {
+    final channel = _channel;
+    _channel = null;
+    if (channel != null) {
+      await Supabase.instance.client.removeChannel(channel);
+    }
+  }
+
+  static void _onNotificationInserted(Map<String, dynamic> row) {
+    final notif = AppNotification.fromJson(row);
+    if (_cache.any((n) => n.id == notif.id)) return;
+
+    _cache.insert(0, notif);
+    unreadCount.value = getUnreadCount();
+    debugPrint('🔔 Notificación en vivo: "${notif.title}" (sin leer: ${unreadCount.value})');
+
+    if (!notif.isRead) _fireLocalNotification(notif);
+  }
+
+  static void _onNotificationUpdated(Map<String, dynamic> row) {
+    final notif = AppNotification.fromJson(row);
+    final index = _cache.indexWhere((n) => n.id == notif.id);
+    if (index == -1) return;
+
+    _cache[index].isRead = notif.isRead;
+    unreadCount.value = getUnreadCount();
+  }
+
+  /// Muestra la alerta del sistema una sola vez por notificación.
+  static void _fireLocalNotification(AppNotification notif) {
+    if (!_rememberNotified(notif.id)) return;
+
+    showLocalNotification(
+      id: notif.id,
+      title: notif.title,
+      body: notif.message,
+      payload: notif.activityId,
+    ).catchError((e) => debugPrint('Error al mostrar notificación local: $e'));
+  }
+
+  /// Registra el id y devuelve si era nuevo.
+  static bool _rememberNotified(String id) {
+    if (!_notifiedIds.add(id)) return false;
+    if (_notifiedIds.length > _maxRememberedIds) {
+      _notifiedIds.remove(_notifiedIds.first);
+    }
+    return true;
+  }
 
   /// Inicializa las notificaciones locales nativas y solicita permisos
   static Future<void> initLocalNotifications() async {
@@ -173,26 +275,16 @@ class NotificationService {
           .eq('user_id', currentUserId)
           .order('created_at', ascending: false);
 
-      final list = (data as List? ?? []).cast<Map<String, dynamic>>();
+      final list = data.cast<Map<String, dynamic>>();
       final parsedList = list.map(AppNotification.fromJson).toList();
 
-      // Si no es la primera carga y hay nuevos elementos no leídos, disparar notificación local
-      if (_lastFetch != null) {
-        for (final notif in parsedList) {
-          if (!notif.isRead && !_notifiedIds.contains(notif.id)) {
-            _notifiedIds.add(notif.id);
-            showLocalNotification(
-              id: notif.id,
-              title: notif.title,
-              body: notif.message,
-              payload: notif.activityId,
-            ).catchError((e) => debugPrint('Error al mostrar notificación local: $e'));
-          }
-        }
-      } else {
-        // En la primera carga, registrar las existentes en el set de notificadas para no duplicar alertas históricas
-        for (final notif in parsedList) {
-          _notifiedIds.add(notif.id);
+      final esPrimeraCarga = _lastFetch == null;
+      for (final notif in parsedList) {
+        if (esPrimeraCarga) {
+          // Las que ya existían al abrir la app no deben sonar como nuevas.
+          _rememberNotified(notif.id);
+        } else if (!notif.isRead) {
+          _fireLocalNotification(notif);
         }
       }
 
