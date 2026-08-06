@@ -241,7 +241,7 @@ class ProfileScreen extends StatelessWidget {
                         ),
                         Switch.adaptive(
                           value: isAgeVisible,
-                          activeColor: AppColors.primaryOrange,
+                          activeThumbColor: AppColors.primaryOrange,
                           onChanged: (val) async {
                             HapticFeedback.lightImpact();
                             setModalState(() => isAgeVisible = val);
@@ -688,7 +688,7 @@ class ProfileScreen extends StatelessWidget {
                 ),
                 Switch.adaptive(
                   value: value,
-                  activeColor: AppColors.primaryOrange,
+                  activeThumbColor: AppColors.primaryOrange,
                   onChanged: enabled ? onChanged : null,
                 ),
               ],
@@ -1406,7 +1406,7 @@ class ProfileScreen extends StatelessWidget {
                                     ),
                                     Switch.adaptive(
                                       value: isDarkLocal,
-                                      activeColor: AppColors.primaryOrange,
+                                      activeThumbColor: AppColors.primaryOrange,
                                       onChanged: (val) {
                                         HapticFeedback.lightImpact();
                                         appState.toggleTheme(val);
@@ -2757,8 +2757,11 @@ class _CreateClanSheetState extends State<_CreateClanSheet> {
       return;
     }
     setState(() => _isSearching = true);
-    final results = await context.read<AppState>().searchProfiles(query);
-    final currentUserId = context.read<AppState>().currentUser?.id;
+    final appState = context.read<AppState>();
+    final currentUserId = appState.currentUser?.id;
+    final results = await appState.searchProfiles(query);
+    if (!mounted) return;
+
     final filtered = results.where((u) => u.id != currentUserId).toList();
     setState(() {
       _searchResults = filtered;

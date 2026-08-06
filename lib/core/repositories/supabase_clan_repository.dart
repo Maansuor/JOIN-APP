@@ -18,8 +18,6 @@ class SupabaseClanRepository implements ClanRepository {
           .select('clan:clans(*)')
           .eq('user_id', userId);
 
-      if (data == null || data is! List) return [];
-
       return data
           .map((row) => row['clan'])
           .where((c) => c != null)
@@ -39,11 +37,7 @@ class SupabaseClanRepository implements ClanRepository {
           .select('*, user:profiles(*)')
           .eq('clan_id', clanId);
 
-      if (data == null || data is! List) return [];
-
-      return data
-          .map((row) => ClanMember.fromJson(row as Map<String, dynamic>))
-          .toList();
+      return data.map(ClanMember.fromJson).toList();
     } catch (e) {
       debugPrint('Error en SupabaseClanRepository.getClanMembers: $e');
       return [];
@@ -129,11 +123,7 @@ class SupabaseClanRepository implements ClanRepository {
           .or('display_name.ilike.%$query%,email.ilike.%$query%,search_code.ilike.%$query%')
           .limit(15);
 
-      if (data == null || data is! List) return [];
-
-      return data
-          .map((row) => UserModel.fromJson(row as Map<String, dynamic>))
-          .toList();
+      return data.map(UserModel.fromJson).toList();
     } catch (e) {
       debugPrint('Error en SupabaseClanRepository.searchProfiles: $e');
       return [];
@@ -148,7 +138,7 @@ class SupabaseClanRepository implements ClanRepository {
           .select('activity_id')
           .eq('user_id', userIdA);
 
-      if (listA == null || listA is! List || listA.isEmpty) return [];
+      if (listA.isEmpty) return [];
       final activityIdsA = listA.map((row) => row['activity_id'] as String).toList();
 
       final listB = await _supabase
@@ -157,12 +147,10 @@ class SupabaseClanRepository implements ClanRepository {
           .eq('user_id', userIdB)
           .inFilter('activity_id', activityIdsA);
 
-      if (listB == null || listB is! List) return [];
-
       final categories = <String>[];
       for (final row in listB) {
         final act = row['activities'];
-        if (act != null && act is Map && act['category'] != null) {
+        if (act is Map && act['category'] != null) {
           final catStr = act['category'] as String;
           categories.addAll(catStr.split(',').map((c) => c.trim()));
         }

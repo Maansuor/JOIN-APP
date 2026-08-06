@@ -96,7 +96,7 @@ class _ActivityCardState extends State<ActivityCard> {
       onTapCancel: () => setState(() => _pressed = false),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 130),
-        transform: Matrix4.identity()..scale(_pressed ? 0.98 : 1.0),
+        transform: Matrix4.identity()..scaleByDouble(_pressed ? 0.98 : 1.0, _pressed ? 0.98 : 1.0, 1.0, 1.0),
         transformAlignment: Alignment.center,
         decoration: BoxDecoration(
           color: Theme.of(context).cardTheme.color ?? Theme.of(context).colorScheme.surface,

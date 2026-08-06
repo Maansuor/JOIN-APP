@@ -15,7 +15,6 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:join_app/core/models/interest_model.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:join_app/features/main/presentation/hennessy_iguana_widget.dart';
-import 'package:join_app/core/models/clan_model.dart';
 
 class ActivityDetailScreen extends StatefulWidget {
   final String activityId;

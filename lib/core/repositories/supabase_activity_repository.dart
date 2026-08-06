@@ -88,7 +88,6 @@ class SupabaseActivityRepository implements ActivityRepository {
       }
 
       final data = await query.order('event_datetime', ascending: true);
-      if (data == null || data is! List) return [];
 
       return data
           .map((e) => Activity.fromJson(_flattenActivityRow(e)))
@@ -446,24 +445,18 @@ class SupabaseActivityRepository implements ActivityRepository {
 
       final List<Activity> list = [];
 
-      if (createdRows != null && createdRows is List) {
-        for (final row in createdRows) {
-          list.add(Activity.fromJson(_flattenActivityRow(row)));
-        }
+      for (final row in createdRows) {
+        list.add(Activity.fromJson(_flattenActivityRow(row)));
       }
 
-      if (participantRows != null && participantRows is List) {
-        for (final row in participantRows) {
-          final actData = row['activities'] as Map<String, dynamic>?;
-          if (actData != null) {
-            final status = actData['status'] as String?;
-            if (status == 'completed') {
-              final act = Activity.fromJson(_flattenActivityRow(actData));
-              if (!list.any((a) => a.id == act.id)) {
-                list.add(act);
-              }
-            }
-          }
+      for (final row in participantRows) {
+        final actData = row['activities'] as Map<String, dynamic>?;
+        if (actData == null) continue;
+        if ((actData['status'] as String?) != 'completed') continue;
+
+        final act = Activity.fromJson(_flattenActivityRow(actData));
+        if (!list.any((a) => a.id == act.id)) {
+          list.add(act);
         }
       }
 
@@ -485,8 +478,7 @@ class SupabaseActivityRepository implements ActivityRepository {
           .eq('is_deleted', false)
           .order('uploaded_at', ascending: true);
 
-      if (data == null || data is! List) return [];
-      return data.map((e) => EventPhoto.fromJson(e as Map<String, dynamic>)).toList();
+      return data.map(EventPhoto.fromJson).toList();
     } catch (e) {
       debugPrint('Error en Supabase getEventPhotos: $e');
       return [];
@@ -643,7 +635,7 @@ class SupabaseActivityRepository implements ActivityRepository {
 
   String _uuid() {
     final random = Random.secure();
-    final hexDigits = '0123456789abcdef';
+    const hexDigits = '0123456789abcdef';
     
     String randomHex(int length) {
       return String.fromCharCodes(

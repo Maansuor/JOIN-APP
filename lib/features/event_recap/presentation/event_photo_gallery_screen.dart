@@ -92,38 +92,10 @@ class _EventPhotoGalleryScreenState extends State<EventPhotoGalleryScreen> {
 
       // Recargar fotos localmente
       final updatedPhotos = await activityRepo.getEventPhotos(widget.activityId);
-      setState(() {
-        photos = updatedPhotos;
-        // Si no hay fotos reales (caso mock fallback), togglear mock
-        if (photos.isEmpty && widget.activityId == '1') {
-          _toggleMockLike(photo);
-        }
-      });
+      if (!mounted) return;
+      setState(() => photos = updatedPhotos);
     } catch (e) {
       debugPrint('Error al cambiar like: $e');
-    }
-  }
-
-  void _toggleMockLike(EventPhoto photo) {
-    final index = photos.indexWhere((p) => p.id == photo.id);
-    if (index != -1) {
-      setState(() {
-        final hasLiked = photo.hasLikedByUser(currentUserId ?? 'user_1');
-        photos[index] = EventPhoto(
-          id: photo.id,
-          activityId: photo.activityId,
-          userId: photo.userId,
-          userName: photo.userName,
-          userImageUrl: photo.userImageUrl,
-          photoUrl: photo.photoUrl,
-          caption: photo.caption,
-          uploadedAt: photo.uploadedAt,
-          likes: hasLiked ? (photo.likes - 1) : (photo.likes + 1),
-          likedByUserIds: hasLiked
-              ? (List.from(photo.likedByUserIds)..remove(currentUserId ?? 'user_1'))
-              : (List.from(photo.likedByUserIds)..add(currentUserId ?? 'user_1')),
-        );
-      });
     }
   }
 
@@ -132,8 +104,8 @@ class _EventPhotoGalleryScreenState extends State<EventPhotoGalleryScreen> {
 
     if (!isAuthorized) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Solo el organizador y participantes aprobados de la aventura pueden subir fotos. 🔒'),
+        const SnackBar(
+          content: Text('Solo el organizador y participantes aprobados de la aventura pueden subir fotos. 🔒'),
           backgroundColor: Colors.redAccent,
           behavior: SnackBarBehavior.floating,
         ),
@@ -143,8 +115,8 @@ class _EventPhotoGalleryScreenState extends State<EventPhotoGalleryScreen> {
 
     if (hasUploadedPhoto) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Ya has subido tu foto de recuerdo. (Límite: 1 foto por persona) 📸'),
+        const SnackBar(
+          content: Text('Ya has subido tu foto de recuerdo. (Límite: 1 foto por persona) 📸'),
           backgroundColor: Colors.orangeAccent,
           behavior: SnackBarBehavior.floating,
         ),
@@ -198,8 +170,9 @@ class _EventPhotoGalleryScreenState extends State<EventPhotoGalleryScreen> {
                   Expanded(
                     child: ElevatedButton.icon(
                       onPressed: () async {
+                        final navigator = Navigator.of(ctx);
                         final file = await picker.pickImage(source: ImageSource.camera, imageQuality: 80);
-                        Navigator.pop(ctx, file);
+                        navigator.pop(file);
                       },
                       icon: const Icon(Icons.camera_alt_rounded),
                       label: const Text('Cámara'),
@@ -216,8 +189,9 @@ class _EventPhotoGalleryScreenState extends State<EventPhotoGalleryScreen> {
                   Expanded(
                     child: ElevatedButton.icon(
                       onPressed: () async {
+                        final navigator = Navigator.of(ctx);
                         final file = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
-                        Navigator.pop(ctx, file);
+                        navigator.pop(file);
                       },
                       icon: const Icon(Icons.photo_library_rounded),
                       label: const Text('Galería'),
@@ -238,7 +212,7 @@ class _EventPhotoGalleryScreenState extends State<EventPhotoGalleryScreen> {
       },
     );
 
-    if (image == null) return;
+    if (image == null || !mounted) return;
 
     // Diálogo para pie de foto
     final captionController = TextEditingController();
@@ -306,11 +280,14 @@ class _EventPhotoGalleryScreenState extends State<EventPhotoGalleryScreen> {
       },
     );
 
-    if (confirmUpload != true) return;
+    if (confirmUpload != true || !mounted) return;
+
+    // Se captura antes de los await: después la pantalla puede haberse cerrado.
+    final messenger = ScaffoldMessenger.of(context);
+    final appState = context.read<AppState>();
 
     setState(() => isLoading = true);
     try {
-      final appState = context.read<AppState>();
       await appState.activityRepository.uploadEventPhoto(
         activityId: widget.activityId,
         userId: currentUserId!,
@@ -321,7 +298,7 @@ class _EventPhotoGalleryScreenState extends State<EventPhotoGalleryScreen> {
       // Recargar datos
       await _loadRecapData();
 
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(
           content: const Text('¡Foto añadida al mural con éxito! 🌟'),
           backgroundColor: const Color(0xFF10B981),
@@ -331,7 +308,7 @@ class _EventPhotoGalleryScreenState extends State<EventPhotoGalleryScreen> {
       );
     } catch (e) {
       debugPrint('Error uploading photo: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(
           content: Text('Error al subir foto: $e'),
           backgroundColor: Colors.redAccent,

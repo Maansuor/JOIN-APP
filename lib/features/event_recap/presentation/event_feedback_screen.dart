@@ -204,6 +204,7 @@ class _EventFeedbackScreenState extends State<EventFeedbackScreen> {
               width: double.infinity,
               child: FilledButton(
                 onPressed: () {
+                  final router = GoRouter.of(context);
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                       content: Text('✅ Gracias por tu feedback!'),
@@ -212,7 +213,9 @@ class _EventFeedbackScreenState extends State<EventFeedbackScreen> {
                     ),
                   );
                   Future.delayed(const Duration(seconds: 1), () {
-                    context.go('/activity/${widget.activityId}');
+                    // La ruta vive bajo /main; sin el prefijo GoRouter no la
+                    // encuentra y muestra su pantalla de error.
+                    if (mounted) router.go('/main/activity/${widget.activityId}');
                   });
                 },
                 child: const Text('Enviar Feedback'),

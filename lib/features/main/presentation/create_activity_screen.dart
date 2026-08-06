@@ -67,8 +67,8 @@ class _CreateActivityScreenState extends State<CreateActivityScreen>
   late AnimationController _fabController;
 
   // Colores y datos por categoría
-  static final Map<String, Color> _catColors = CategoryConstants.colors;
-  static final Map<String, IconData> _catIcons = CategoryConstants.icons;
+  static const Map<String, Color> _catColors = CategoryConstants.colors;
+  static const Map<String, IconData> _catIcons = CategoryConstants.icons;
 
   Color get _selectedColor =>
       _catColors[_selectedCategory] ?? AppColors.primaryOrange;
@@ -1074,7 +1074,7 @@ class _DateTimeTileState extends State<_DateTimeTile> {
       onTapCancel: () => setState(() => _pressed = false),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 120),
-        transform: Matrix4.identity()..scale(_pressed ? 0.97 : 1.0),
+        transform: Matrix4.identity()..scaleByDouble(_pressed ? 0.97 : 1.0, _pressed ? 0.97 : 1.0, 1.0, 1.0),
         transformAlignment: Alignment.center,
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(

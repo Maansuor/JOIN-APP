@@ -191,16 +191,18 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       return _NotificationCard(
                         notification: notif,
                         onTap: () async {
+                          // El router se resuelve antes del await; el context de
+                          // este item puede dejar de estar montado al volver.
+                          final router = GoRouter.of(context);
                           await _markAsRead(notif.id);
-                          if (!mounted) return;
-                          if (notif.activityId != null) {
-                            if (notif.type == NotificationType.joinRequest) {
-                              context.push('/main/activity/${notif.activityId}/requests');
-                            } else if (notif.type == NotificationType.acceptedToGroup) {
-                              context.push('/main/activity/${notif.activityId}/group');
-                            } else {
-                              context.push('/main/activity/${notif.activityId}');
-                            }
+                          if (!mounted || notif.activityId == null) return;
+
+                          if (notif.type == NotificationType.joinRequest) {
+                            router.push('/main/activity/${notif.activityId}/requests');
+                          } else if (notif.type == NotificationType.acceptedToGroup) {
+                            router.push('/main/activity/${notif.activityId}/group');
+                          } else {
+                            router.push('/main/activity/${notif.activityId}');
                           }
                         },
                         iconData: _iconFor(notif.type),

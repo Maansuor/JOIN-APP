@@ -481,10 +481,10 @@ class _JoinRequestsScreenState extends State<JoinRequestsScreen> with SingleTick
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Row(
+          content: const Row(
             children: [
-              const Icon(Icons.check_circle_rounded, color: Colors.white),
-              const SizedBox(width: 12),
+              Icon(Icons.check_circle_rounded, color: Colors.white),
+              SizedBox(width: 12),
               Expanded(child: Text('¡Has aceptado a un nuevo integrante!')),
             ],
           ),
@@ -535,29 +535,28 @@ class _JoinRequestsScreenState extends State<JoinRequestsScreen> with SingleTick
             TextButton(onPressed: () => context.pop(), child: Text('Cancelar', style: TextStyle(color: isDark ? Colors.white54 : Colors.grey))),
             FilledButton(
               onPressed: () async {
+                // Se capturan antes de cerrar el diálogo y de esperar: después,
+                // este context ya no pertenece a un widget montado.
+                final messenger = ScaffoldMessenger.of(context);
+                final appState = context.read<AppState>();
                 context.pop(); // close dialog
                 try {
-                  final appState = context.read<AppState>();
                   await appState.respondToRequest(
                     request.id,
                     accepted: false,
                     responseMessage: reasonController.text.isEmpty ? null : reasonController.text,
                   );
-                  
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: const Text('Solicitud rechazada'),
-                        backgroundColor: Colors.red,
-                        behavior: SnackBarBehavior.floating,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      )
-                    );
-                  }
+
+                  messenger.showSnackBar(
+                    SnackBar(
+                      content: const Text('Solicitud rechazada'),
+                      backgroundColor: Colors.red,
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    )
+                  );
                 } catch (_) {
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Error al rechazar')));
-                  }
+                  messenger.showSnackBar(const SnackBar(content: Text('Error al rechazar')));
                 }
               },
               style: FilledButton.styleFrom(backgroundColor: Colors.red, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),

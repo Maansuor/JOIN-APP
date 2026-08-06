@@ -160,6 +160,10 @@ class _EditProfileScreenState extends State<EditProfileScreen>
     setState(() => _isSaving = true);
     _saveCtrl.forward();
 
+    // Se resuelve antes de leer el archivo: después del await el context ya
+    // no es seguro de usar.
+    final appState = context.read<AppState>();
+
     try {
       String? imageBase64;
       if (_imageFile != null) {
@@ -167,7 +171,6 @@ class _EditProfileScreenState extends State<EditProfileScreen>
         imageBase64 = 'data:image/jpeg;base64,${base64Encode(bytes)}';
       }
 
-      final appState = context.read<AppState>();
       await appState.updateProfile(
         name: _nameCtrl.text.trim(),
         bio: _bioCtrl.text.trim(),
@@ -188,7 +191,6 @@ class _EditProfileScreenState extends State<EditProfileScreen>
       Navigator.of(context).pop();
     } catch (e) {
       if (!mounted) return;
-      final appState = context.read<AppState>();
       _showError(appState.error ?? 'Error al guardar cambios');
     } finally {
       if (mounted) {

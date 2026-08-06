@@ -495,7 +495,7 @@ class _ClanChatScreenState extends State<ClanChatScreen> {
                 ),
               ),
               child: _isLoadingMessages && _messages.isEmpty
-                  ? Center(
+                  ? const Center(
                       child: CircularProgressIndicator(color: AppColors.primaryOrange),
                     )
                   : _messages.where((m) => m['is_deleted'] != true).isEmpty
@@ -509,7 +509,7 @@ class _ClanChatScreenState extends State<ClanChatScreen> {
                                   color: AppColors.primaryOrange.withValues(alpha: 0.08),
                                   shape: BoxShape.circle,
                                 ),
-                                child: Icon(
+                                child: const Icon(
                                   Icons.forum_rounded,
                                   color: AppColors.primaryOrange,
                                   size: 36,

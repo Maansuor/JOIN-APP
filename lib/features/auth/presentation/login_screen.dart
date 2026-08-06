@@ -1057,7 +1057,7 @@ class _SocialButtonState extends State<_SocialButton> {
       onTapCancel: () => setState(() => _pressed = false),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 130),
-        transform: Matrix4.identity()..scale(_pressed ? 0.97 : 1.0, _pressed ? 0.97 : 1.0, 1.0),
+        transform: Matrix4.identity()..scaleByDouble(_pressed ? 0.97 : 1.0, _pressed ? 0.97 : 1.0, 1.0, 1.0),
         transformAlignment: Alignment.center,
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         decoration: BoxDecoration(

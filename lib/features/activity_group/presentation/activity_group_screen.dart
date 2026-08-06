@@ -317,7 +317,7 @@ class _ActivityGroupScreenState extends State<ActivityGroupScreen> with SingleTi
                     itemBuilder: (context, index) {
                       final read = message.readBy[index];
                       return ListTile(
-                        leading: const CircleAvatar(child: Icon(Icons.person, color: Colors.white), backgroundColor: Color(0xFFFD7C36)),
+                        leading: const CircleAvatar(backgroundColor: Color(0xFFFD7C36), child: Icon(Icons.person, color: Colors.white)),
                         title: Text(read.userName, style: const TextStyle(fontWeight: FontWeight.bold)),
                         subtitle: Text('Leído el ${read.readAt.toString().substring(0, 16)}', style: TextStyle(color: Colors.grey[600], fontSize: 12)),
                       );
@@ -1369,7 +1369,7 @@ class _ActivityGroupScreenState extends State<ActivityGroupScreen> with SingleTi
                   ),
                   const SizedBox(height: 16),
                   DropdownButtonFormField<String>(
-                    value: selectedCategory,
+                    initialValue: selectedCategory,
                     items: const [
                       DropdownMenuItem(value: 'food', child: Text('🍕 Comida')),
                       DropdownMenuItem(value: 'drinks', child: Text('🥤 Bebidas')),
@@ -1478,7 +1478,7 @@ class _ChatMessageBubble extends StatelessWidget {
                 CircleAvatar(
                   backgroundImage: message.userImageUrl.startsWith('http')
                       ? NetworkImage(message.userImageUrl) as ImageProvider
-                      : AssetImage('assets/images/placeholder.png'),
+                      : const AssetImage('assets/images/placeholder.png'),
                   radius: 20,
                 ),
                 const SizedBox(width: 8),

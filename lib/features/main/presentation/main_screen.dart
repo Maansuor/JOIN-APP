@@ -212,34 +212,35 @@ class _MainScreenState extends State<MainScreen> {
                     color: Colors.transparent,
                     child: InkWell(
                       onTap: () async {
+                        // El messenger se toma antes de cerrar el diálogo: al
+                        // volver del await este context ya no está montado.
+                        final messenger = ScaffoldMessenger.of(context);
                         HapticFeedback.mediumImpact();
                         Navigator.of(context).pop();
                         setState(() {
                           _isDialogShowing = false;
                         });
                         await appState.updateSelectedCity(actualCity, newPosition);
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Row(
-                                children: [
-                                  const Icon(Icons.check_circle_rounded, color: Colors.white),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Text(
-                                      '¡Ubicación actualizada a $actualCity! 🌟',
-                                      style: const TextStyle(fontWeight: FontWeight.bold),
-                                    ),
+                        messenger.showSnackBar(
+                          SnackBar(
+                            content: Row(
+                              children: [
+                                const Icon(Icons.check_circle_rounded, color: Colors.white),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    '¡Ubicación actualizada a $actualCity! 🌟',
+                                    style: const TextStyle(fontWeight: FontWeight.bold),
                                   ),
-                                ],
-                              ),
-                              behavior: SnackBarBehavior.floating,
-                              backgroundColor: const Color(0xFF10B981),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                              margin: const EdgeInsets.fromLTRB(16, 0, 16, 80),
+                                ),
+                              ],
                             ),
-                          );
-                        }
+                            behavior: SnackBarBehavior.floating,
+                            backgroundColor: const Color(0xFF10B981),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            margin: const EdgeInsets.fromLTRB(16, 0, 16, 80),
+                          ),
+                        );
                       },
                       customBorder: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                       child: const Center(
