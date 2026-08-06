@@ -5,7 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:join_app/core/providers/app_state.dart';
-import 'package:join_app/core/data/mock_data.dart';
+import 'package:join_app/features/activity/presentation/widgets/activity_not_found.dart';
 import 'package:join_app/core/repositories/supabase_chat_repository.dart';
 import 'package:join_app/core/services/encryption_service.dart';
 import 'package:join_app/core/models/chat_message_model.dart';
@@ -221,12 +221,12 @@ class _ActivityGroupScreenState extends State<ActivityGroupScreen> with SingleTi
     final currentUserId = context.read<AppState>().currentUser?.id;
     final isMine = message.userId == currentUserId;
     
-    // Asumir que si el appState dice que el organizador soy yo, isOrganizer=true.
-    final activity = context.read<AppState>().activities.firstWhere(
-      (a) => a.id == widget.activityId,
-      orElse: () => mockActivities.firstWhere((a) => a.id == widget.activityId, orElse: () => mockActivities[0])
-    );
-    final isOrganizer = activity.organizerId == currentUserId;
+    final activity = context
+        .read<AppState>()
+        .activities
+        .where((a) => a.id == widget.activityId)
+        .firstOrNull;
+    final isOrganizer = activity != null && activity.organizerId == currentUserId;
     
     showModalBottomSheet(
       context: context,
@@ -368,13 +368,15 @@ class _ActivityGroupScreenState extends State<ActivityGroupScreen> with SingleTi
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
-    final activity = appState.activities.firstWhere(
-      (a) => a.id == widget.activityId,
-      orElse: () => mockActivities.firstWhere(
-        (a) => a.id == widget.activityId,
-        orElse: () => mockActivities[0],
-      ),
-    );
+    final activity = appState.activities
+        .where((a) => a.id == widget.activityId)
+        .firstOrNull;
+    if (activity == null) {
+      return const ActivityNotFound(
+        titulo: 'Grupo no disponible',
+        mensaje: 'La actividad de este grupo ya no existe o dejaste de participar en ella.',
+      );
+    }
 
     // Aquí ya no sobrescribimos "contributions" con la data estática.
     // Lo dejamos tal cual lo carga _loadContributions de la base de datos.

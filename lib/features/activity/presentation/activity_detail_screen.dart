@@ -5,7 +5,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:join_app/core/providers/app_state.dart';
-import 'package:join_app/core/data/mock_data.dart';
+import 'package:join_app/features/activity/presentation/widgets/activity_not_found.dart';
 import 'package:join_app/core/models/activity_model.dart';
 import 'package:join_app/core/models/join_request_model.dart';
 import 'package:join_app/core/theme/app_colors.dart';
@@ -59,13 +59,11 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> with Ticker
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
-    final activity = appState.activities.firstWhere(
-      (a) => a.id == widget.activityId,
-      orElse: () => mockActivities.firstWhere(
-        (a) => a.id == widget.activityId,
-        orElse: () => mockActivities[0],
-      ),
-    );
+    final activity = appState.activities
+        .where((a) => a.id == widget.activityId)
+        .firstOrNull;
+    if (activity == null) return const ActivityNotFound();
+
     final currentUserId = context.read<AppState>().currentUser?.id;
     final isOrganizer =
         currentUserId != null && activity.organizerId == currentUserId;

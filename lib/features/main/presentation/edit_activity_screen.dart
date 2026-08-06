@@ -3,13 +3,12 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:join_app/core/providers/app_state.dart';
-import 'package:join_app/core/data/mock_data.dart';
+import 'package:join_app/features/activity/presentation/widgets/activity_not_found.dart';
 import 'package:join_app/core/models/activity_model.dart';
 import 'package:intl/intl.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:join_app/core/models/interest_model.dart';
-import 'package:join_app/core/theme/app_colors.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:join_app/features/main/presentation/map_picker_screen.dart';
 import 'package:join_app/features/main/presentation/widgets/activity_form_sections.dart';
@@ -57,13 +56,24 @@ class _EditActivityScreenState extends State<EditActivityScreen> {
 
   void _loadActivity() {
     final appState = context.read<AppState>();
-    _activity = appState.activities.firstWhere(
-      (a) => a.id == widget.activityId,
-      orElse: () => mockActivities.firstWhere(
-        (a) => a.id == widget.activityId,
-        orElse: () => mockActivities[0],
-      ),
-    );
+    _activity = appState.activities
+        .where((a) => a.id == widget.activityId)
+        .firstOrNull;
+
+    if (_activity == null) {
+      // La actividad ya no existe. Se inicializan los controladores vacíos
+      // porque dispose() los libera siempre, y build() corta mostrando el
+      // estado de "no disponible" antes de usarlos.
+      _titleController = TextEditingController();
+      _descriptionController = TextEditingController();
+      _locationController = TextEditingController();
+      _maxParticipantsController = TextEditingController();
+      _meetingLocationController = TextEditingController();
+      _selectedDate = DateTime.now();
+      _selectedTime = TimeOfDay.now();
+      _selectedAgeRange = _ageRanges.first;
+      return;
+    }
 
     // Inicializar controladores con datos existentes
     _titleController = TextEditingController(text: _activity!.title);
@@ -252,8 +262,13 @@ class _EditActivityScreenState extends State<EditActivityScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // _loadActivity() es síncrono, así que null aquí significa que la
+    // actividad no existe, no que siga cargando.
     if (_activity == null) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const ActivityNotFound(
+        titulo: 'No se puede editar',
+        mensaje: 'Esta actividad ya no existe, así que no hay nada que editar.',
+      );
     }
 
     return Scaffold(

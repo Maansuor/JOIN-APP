@@ -6,7 +6,6 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:join_app/core/data/mock_event_data.dart';
 import 'package:join_app/core/models/event_photo_model.dart';
 import 'package:join_app/core/models/activity_model.dart';
 import 'package:join_app/core/providers/app_state.dart';
@@ -67,11 +66,6 @@ class _EventPhotoGalleryScreenState extends State<EventPhotoGalleryScreen> {
 
       // 5. Cargar fotos reales
       photos = await activityRepo.getEventPhotos(widget.activityId);
-
-      // Fallback a mock si estamos en ID 1 y la tabla está vacía
-      if (photos.isEmpty && widget.activityId == '1') {
-        photos = List.from(mockEventPhotos);
-      }
     } catch (e) {
       debugPrint('Error en _loadRecapData: $e');
     } finally {

@@ -21,7 +21,6 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
-  String? _lastNotifiedCity;
   bool _isDialogShowing = false;
 
   @override
