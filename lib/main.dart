@@ -18,7 +18,6 @@ import 'package:join_app/features/join_requests/presentation/join_requests_scree
 import 'package:join_app/features/activity_group/presentation/activity_group_screen.dart';
 import 'package:join_app/features/event_recap/presentation/event_photo_gallery_screen.dart';
 import 'package:join_app/features/event_recap/presentation/event_feedback_screen.dart';
-import 'package:join_app/core/services/supabase_service.dart';
 import 'package:join_app/core/services/notification_service.dart';
 import 'package:join_app/core/models/clan_model.dart';
 import 'package:join_app/features/clans/presentation/clan_chat_screen.dart';
@@ -54,8 +53,9 @@ void main() async {
         : 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
   );
 
-  // Asegurar la existencia de los Storage Buckets locales de Supabase
-  await SupabaseService.instance.ensureBucketsExist();
+  // Los buckets de Storage (avatars, activities, chat) se crean en las
+  // migraciones: crearlos desde el cliente exigiría privilegios de
+  // administrador que la app no tiene ni debe tener.
 
   // Inicializar notificaciones locales nativas (Paso A)
   await NotificationService.initLocalNotifications();

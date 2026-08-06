@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// ══════════════════════════════════════════════════════════════
@@ -27,30 +26,4 @@ class SupabaseService {
   /// ¿Hay un usuario con sesión activa?
   bool get hasSession => currentSession != null;
 
-  /// Helper para inicializar buckets de Storage de manera segura
-  Future<void> ensureBucketsExist() async {
-    try {
-      final buckets = await client.storage.listBuckets();
-      final hasAvatars = buckets.any((b) => b.id == 'avatars');
-      final hasActivities = buckets.any((b) => b.id == 'activities');
-
-      if (!hasAvatars) {
-        await client.storage.createBucket(
-          'avatars',
-          const BucketOptions(public: true),
-        );
-        debugPrint('Bucket public "avatars" creado con éxito.');
-      }
-
-      if (!hasActivities) {
-        await client.storage.createBucket(
-          'activities',
-          const BucketOptions(public: true),
-        );
-        debugPrint('Bucket public "activities" creado con éxito.');
-      }
-    } catch (e) {
-      debugPrint('Warning: No se pudieron verificar/crear los buckets: $e');
-    }
-  }
 }
