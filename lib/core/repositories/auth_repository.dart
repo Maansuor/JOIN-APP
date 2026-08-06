@@ -5,8 +5,7 @@ import '../models/user_model.dart';
 
 class AuthResult {
   final UserModel user;
-  final String token;
-  const AuthResult({required this.user, required this.token});
+  const AuthResult({required this.user});
 }
 
 /// ══════════════════════════════════════════════════════════════
@@ -48,7 +47,6 @@ class AuthRepository {
 
     return AuthResult(
       user: UserModel.fromJson(profileData),
-      token: response.session?.accessToken ?? '',
     );
   }
 
@@ -93,7 +91,6 @@ class AuthRepository {
 
     return AuthResult(
       user: UserModel.fromJson(profileData),
-      token: response.session?.accessToken ?? '',
     );
   }
 
@@ -137,8 +134,7 @@ class AuthRepository {
 
       return AuthResult(
         user: UserModel.fromJson(profileData),
-        token: response.session?.accessToken ?? '',
-      );
+        );
     } catch (e) {
       debugPrint('Google Sign-In Error: $e');
       rethrow;
@@ -176,11 +172,12 @@ class AuthRepository {
   }
 
   // ── Restaurar Sesión ─────────────────────────────────────────
-  Future<UserModel?> restoreSession(String token) async {
-    // Supabase maneja la sesión persistente de forma nativa e interna.
-    // Simplemente validamos si hay sesión activa.
-    final session = _supabase.auth.currentSession;
-    if (session == null) return null;
+  /// Devuelve el perfil si Supabase tiene una sesión persistida, o null.
+  ///
+  /// Supabase guarda y renueva la sesión por su cuenta, así que la app no
+  /// necesita conservar ningún token.
+  Future<UserModel?> restoreSession() async {
+    if (_supabase.auth.currentSession == null) return null;
     return getMe();
   }
 
@@ -215,7 +212,6 @@ class AuthRepository {
 
     return AuthResult(
       user: UserModel.fromJson(profileData),
-      token: response.session?.accessToken ?? '',
     );
   }
 }

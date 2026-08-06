@@ -22,7 +22,7 @@ import '../location/location_tracker.dart';
 //  AppState  — Estado global conectado a Supabase
 //
 //  ✅ autenticación vía Supabase
-//  ✅ persistencia del token con Supabase Session persistente
+//  ✅ sesión persistida por Supabase, sin token duplicado en el cliente
 //  ✅ actividades desde PostgreSQL vía SupabaseActivityRepository
 //  ✅ solicitudes de unión vía Supabase
 //  Compatible con la UI existente (misma interfaz pública)
@@ -194,45 +194,31 @@ class AppState extends ChangeNotifier {
 
   // ─── Inicialización / restaurar sesión ─────────────────────────────────────
 
-  /// Restaura sesión desde SharedPreferences (token guardado)
+  /// Recupera la sesión que Supabase persiste por su cuenta.
+  ///
+  /// No se guarda ningún token: Supabase ya almacena y renueva la sesión, y
+  /// duplicarla en SharedPreferences sólo servía para dejar un JWT en claro.
   Future<void> _restoreSession() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('auth_token');
-    if (token == null) return;
-
     try {
-      final user = await _authRepo.restoreSession(token);
-      if (user != null) {
-        _currentUser = user;
-        notifyListeners();
-        // La ciudad ya la restauró LocationTracker; aquí sólo se sincroniza
-        // con el perfil, que necesita el usuario ya cargado.
-        if (currentCity != null) _syncUserCityToBackend(currentCity!);
-        await _loadActivities();
-        await loadUserClans(); // Cargar clanes del usuario
-      } else {
-        // Token inválido (401), borrarlo
-        await prefs.remove('auth_token');
-      }
+      final user = await _authRepo.restoreSession();
+      if (user == null) return; // Sin sesión activa: se queda en login.
+
+      _currentUser = user;
+      notifyListeners();
+      // La ciudad ya la restauró LocationTracker; aquí sólo se sincroniza
+      // con el perfil, que necesita el usuario ya cargado.
+      if (currentCity != null) _syncUserCityToBackend(currentCity!);
+      await _loadActivities();
+      await loadUserClans();
     } on AuthException catch (e) {
       debugPrint('Restore session auth error: ${e.message}');
-      // Solo borrar el token si la sesión no es válida (401)
-      if (e.statusCode == '401') {
-        await prefs.remove('auth_token');
-      }
-      // Si es error de red, mantener el token para reintentar
     } catch (e) {
       debugPrint('Restore session error: $e');
-      // Error de red u otro, mantener el token para reintentar
     }
   }
 
-  Future<void> _saveToken(String token) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('auth_token', token);
-  }
-
-  Future<void> _clearToken() async {
+  /// Borra el token que guardaban versiones anteriores de la app.
+  Future<void> _clearLegacyToken() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('auth_token');
   }
@@ -247,7 +233,7 @@ class AppState extends ChangeNotifier {
     try {
       final result = await _authRepo.login(username, password);
       _currentUser = result.user;
-      await _saveToken(result.token);
+      // Supabase persiste la sesión por su cuenta: no hay token que guardar.
       if (currentCity != null) _syncUserCityToBackend(currentCity!);
       _setLoading(false);
       // Cargar actividades y clanes en background
@@ -283,7 +269,7 @@ class AppState extends ChangeNotifier {
         password: password,
       );
       _currentUser = result.user;
-      await _saveToken(result.token);
+      // Supabase persiste la sesión por su cuenta: no hay token que guardar.
       if (currentCity != null) _syncUserCityToBackend(currentCity!);
       _setLoading(false);
       // Cargar actividades y clanes en background
@@ -314,7 +300,7 @@ class AppState extends ChangeNotifier {
         return false;
       }
       _currentUser = result.user;
-      await _saveToken(result.token);
+      // Supabase persiste la sesión por su cuenta: no hay token que guardar.
       if (currentCity != null) _syncUserCityToBackend(currentCity!);
       _setLoading(false);
       // Cargar actividades y clanes en background
@@ -364,7 +350,7 @@ class AppState extends ChangeNotifier {
     try {
       final result = await _authRepo.verifyMagicCode(email, code);
       _currentUser = result.user;
-      await _saveToken(result.token);
+      // Supabase persiste la sesión por su cuenta: no hay token que guardar.
       if (currentCity != null) _syncUserCityToBackend(currentCity!);
       _setLoading(false);
       // Cargar actividades y clanes en background
@@ -394,7 +380,7 @@ class AppState extends ChangeNotifier {
     _acceptedActivityIds.clear();
     _activitiesLoaded = false;
     _error = null;
-    await _clearToken();
+    await _clearLegacyToken();
     notifyListeners();
   }
 
