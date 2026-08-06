@@ -1,5 +1,3 @@
-import '../services/api_client.dart';
-
 /// Proveedor de autenticación
 enum AuthProvider { email, google, facebook, apple }
 
@@ -63,6 +61,15 @@ class UserModel {
   /// ¿El usuario completó el onboarding?
   final bool setupCompleted;
 
+  // ── Nuevos campos gamificación y segmentación v1.2.0 ───────
+  final String userRole; // 'casual' o 'corporate'
+  final bool completedOnboarding;
+  final int iguanaLevel;
+  final int iguanaPoints;
+  final String iguanaPersonality;
+  final String iguanaType;
+  final String searchCode;
+
   const UserModel({
     required this.id,
     required this.name,
@@ -81,6 +88,13 @@ class UserModel {
     this.ageVisible = true,
     this.authProviders = const [AuthProvider.email],
     this.setupCompleted = false,
+    this.userRole = 'casual',
+    this.completedOnboarding = false,
+    this.iguanaLevel = 1,
+    this.iguanaPoints = 0,
+    this.iguanaPersonality = 'friendly',
+    this.iguanaType = 'non_binary',
+    this.searchCode = '',
   });
 
   // ── Getters calculados ──────────────────────────────────────
@@ -112,16 +126,12 @@ class UserModel {
     return name.isNotEmpty ? name[0].toUpperCase() : '?';
   }
 
-  /// URL absoluta para mostrar la imagen (maneja Google vs Servidor Propio)
+  /// URL absoluta para mostrar la imagen (Supabase Storage / Google entregan URLs http completas)
   String get fullProfileImageUrl {
     if (profileImageUrl.isEmpty) return '';
     if (profileImageUrl.startsWith('http')) return profileImageUrl;
-    if (profileImageUrl.startsWith('assets/')) {
-      return ''; // No concatenar para assets locales
-    }
-
-    final base = ApiClient.instance.baseUrl.replaceAll('/api', '');
-    return '$base/$profileImageUrl';
+    // Assets locales o rutas relativas legadas del antiguo servidor PHP: sin URL de red
+    return '';
   }
 
   /// ¿Tiene foto de perfil real?
@@ -131,41 +141,88 @@ class UserModel {
   /// ¿Es una imagen de los assets?
   bool get isAssetImage => profileImageUrl.startsWith('assets/');
 
+  /// Nombre del compañero iguana según su tipo
+  String get companionName => switch (iguanaType) {
+        'male' => 'Drago',
+        'female' => 'Eli',
+        _ => 'Halo',
+      };
+
+  /// Ruta del asset de la imagen de la mascota companion
+  String get companionAsset => switch (iguanaType) {
+        'male' => 'assets/images/mascota/DRAGO.png',
+        'female' => 'assets/images/mascota/ELI.png',
+        _ => 'assets/images/mascota/HALO.png',
+      };
+
   // ── Serialización ───────────────────────────────────────────
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
-    // 'name' = mock format, 'fullName' = backend PHP format
-    final name = (json['fullName'] ?? json['name'] ?? '') as String;
+    // Acepta múltiples variantes de nombre (MySQL/Supabase/Mock)
+    final name = (json['fullName'] ?? json['name'] ?? json['display_name'] ?? '') as String;
+    final profileImageUrl = (json['profileImageUrl'] ?? json['profile_image_url'] ?? '') as String;
+    final rating = (json['rating'] as num?)?.toDouble() ?? 0.0;
+    final activitiesAttended = (json['activitiesAttended'] ?? json['activities_attended'] as num?)?.toInt() ?? 0;
+    final activitiesCreated = (json['activitiesCreated'] ?? json['activities_created'] as num?)?.toInt() ?? 0;
+    final isVerified = (json['isVerified'] ?? json['is_verified'] as bool?) ?? false;
+    final ageVisible = (json['ageVisible'] ?? json['age_visible'] as bool?) ?? true;
+    final setupCompleted = (json['setupCompleted'] ?? json['setup_completed'] as bool?) ?? false;
+    final userRole = (json['userRole'] ?? json['user_role'] ?? 'casual') as String;
+    final completedOnboarding = (json['completedOnboarding'] ?? json['completed_onboarding'] as bool?) ?? false;
+    final iguanaLevel = (json['iguanaLevel'] ?? json['iguana_level'] as num?)?.toInt() ?? 1;
+    final iguanaPoints = (json['iguanaPoints'] ?? json['iguana_points'] as num?)?.toInt() ?? 0;
+    final iguanaPersonality = (json['iguanaPersonality'] ?? json['iguana_personality'] ?? 'friendly') as String;
+    final iguanaType = (json['iguanaType'] ?? json['iguana_type'] ?? 'non_binary') as String;
+    final searchCode = (json['searchCode'] ?? json['search_code'] ?? '') as String;
+    
     return UserModel(
       id: json['id'] as String,
       name: name,
-      profileImageUrl: (json['profileImageUrl'] ?? '') as String,
-      rating: (json['rating'] as num?)?.toDouble() ?? 0.0,
-      activitiesAttended: (json['activitiesAttended'] as num?)?.toInt() ?? 0,
-      activitiesCreated: (json['activitiesCreated'] as num?)?.toInt() ?? 0,
+      profileImageUrl: profileImageUrl,
+      rating: rating,
+      activitiesAttended: activitiesAttended,
+      activitiesCreated: activitiesCreated,
       bio: (json['bio'] ?? '') as String,
-      interests: List<String>.from(json['interests'] as List? ?? []),
-      isVerified: json['isVerified'] as bool? ?? false,
+      interests: json['interests'] != null
+          ? List<String>.from(json['interests'] as List)
+          : json['user_interests'] != null
+              ? (json['user_interests'] as List)
+                  .map((e) => e is Map ? (e['tag'] ?? '').toString() : e.toString())
+                  .where((s) => s.isNotEmpty)
+                  .toList()
+              : const [],
+      isVerified: isVerified,
       joinedDate: json['joinedDate'] != null
           ? DateTime.tryParse(json['joinedDate'] as String) ?? DateTime.now()
-          : DateTime.now(),
+          : json['joined_date'] != null
+              ? DateTime.tryParse(json['joined_date'] as String) ?? DateTime.now()
+              : DateTime.now(),
       email: json['email'] as String?,
       phone: json['phone'] as String?,
       birthDate: json['birthDate'] != null
           ? DateTime.tryParse(json['birthDate'] as String)
-          : null,
+          : json['birth_date'] != null
+              ? DateTime.tryParse(json['birth_date'] as String)
+              : null,
       gender: json['gender'] != null
           ? UserGender.fromJson(json['gender'] as String)
           : UserGender.preferNotToSay,
-      ageVisible: json['ageVisible'] as bool? ?? true,
-      authProviders: (json['authProviders'] as List?)
+      ageVisible: ageVisible,
+      authProviders: (json['authProviders'] ?? json['auth_providers'] as List?)
               ?.map((p) => AuthProvider.values.firstWhere(
                     (e) => e.name == p,
                     orElse: () => AuthProvider.email,
                   ))
               .toList() ??
           [AuthProvider.email],
-      setupCompleted: json['setupCompleted'] as bool? ?? false,
+      setupCompleted: setupCompleted,
+      userRole: userRole,
+      completedOnboarding: completedOnboarding,
+      iguanaLevel: iguanaLevel,
+      iguanaPoints: iguanaPoints,
+      iguanaPersonality: iguanaPersonality,
+      iguanaType: iguanaType,
+      searchCode: searchCode,
     );
   }
 
@@ -188,6 +245,13 @@ class UserModel {
       'ageVisible': ageVisible,
       'authProviders': authProviders.map((p) => p.name).toList(),
       'setupCompleted': setupCompleted,
+      'userRole': userRole,
+      'completedOnboarding': completedOnboarding,
+      'iguanaLevel': iguanaLevel,
+      'iguanaPoints': iguanaPoints,
+      'iguanaPersonality': iguanaPersonality,
+      'iguanaType': iguanaType,
+      'searchCode': searchCode,
     };
   }
 
@@ -209,6 +273,13 @@ class UserModel {
     bool? ageVisible,
     List<AuthProvider>? authProviders,
     bool? setupCompleted,
+    String? userRole,
+    bool? completedOnboarding,
+    int? iguanaLevel,
+    int? iguanaPoints,
+    String? iguanaPersonality,
+    String? iguanaType,
+    String? searchCode,
   }) {
     return UserModel(
       id: id ?? this.id,
@@ -228,6 +299,13 @@ class UserModel {
       ageVisible: ageVisible ?? this.ageVisible,
       authProviders: authProviders ?? this.authProviders,
       setupCompleted: setupCompleted ?? this.setupCompleted,
+      userRole: userRole ?? this.userRole,
+      completedOnboarding: completedOnboarding ?? this.completedOnboarding,
+      iguanaLevel: iguanaLevel ?? this.iguanaLevel,
+      iguanaPoints: iguanaPoints ?? this.iguanaPoints,
+      iguanaPersonality: iguanaPersonality ?? this.iguanaPersonality,
+      iguanaType: iguanaType ?? this.iguanaType,
+      searchCode: searchCode ?? this.searchCode,
     );
   }
 

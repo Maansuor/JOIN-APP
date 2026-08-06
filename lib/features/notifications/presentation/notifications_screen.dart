@@ -81,7 +81,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final unreadCount = _notifications.where((n) => !n.isRead).length;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FB),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: RefreshIndicator(
         color: AppColors.primaryOrange,
         onRefresh: () => _loadNotifications(refresh: true),
@@ -91,18 +91,20 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             SliverAppBar(
               pinned: true,
               expandedHeight: 110,
-              backgroundColor: Colors.white,
+              backgroundColor: Theme.of(context).scaffoldBackgroundColor,
               surfaceTintColor: Colors.transparent,
               elevation: 0,
               leading: IconButton(
                 icon: Container(
                   padding: const EdgeInsets.all(8),
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFF5F7FB),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? const Color(0xFF161920)
+                        : const Color(0xFFF5F7FB),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.arrow_back_ios_rounded,
-                      color: Color(0xFF041249), size: 16),
+                  child: Icon(Icons.arrow_back_ios_rounded,
+                      color: Theme.of(context).colorScheme.onSurface, size: 16),
                 ),
                 onPressed: () => Navigator.pop(context),
               ),
@@ -129,10 +131,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 titlePadding: const EdgeInsets.fromLTRB(20, 0, 20, 14),
                 title: Row(
                   children: [
-                    const Text(
+                    Text(
                       'Notificaciones',
                       style: TextStyle(
-                        color: Color(0xFF041249),
+                        color: Theme.of(context).colorScheme.onSurface,
                         fontWeight: FontWeight.bold,
                         fontSize: 18,
                       ),
@@ -241,12 +243,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             ),
           ),
           const SizedBox(height: 20),
-          const Text(
+          Text(
             'Sin notificaciones',
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
-              color: Color(0xFF041249),
+              color: Theme.of(context).colorScheme.onSurface,
             ),
           ),
           const SizedBox(height: 8),
@@ -255,7 +257,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 14,
-              color: Colors.grey[500],
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? const Color(0xFF94A3B8)
+                  : Colors.grey[500],
               height: 1.5,
             ),
           ),
@@ -271,17 +275,21 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         children: [
           Icon(Icons.wifi_off_rounded, size: 56, color: Colors.grey[400]),
           const SizedBox(height: 16),
-          const Text(
+          Text(
             'Sin conexión',
             style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF041249)),
+                color: Theme.of(context).colorScheme.onSurface),
           ),
           const SizedBox(height: 8),
           Text(
             'No se pudieron cargar las notificaciones',
-            style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+            style: TextStyle(
+                fontSize: 14,
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? const Color(0xFF94A3B8)
+                    : Colors.grey[500]),
           ),
           const SizedBox(height: 24),
           ElevatedButton.icon(
@@ -326,11 +334,17 @@ class _NotificationCard extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
-        color: isRead ? Colors.white : color.withValues(alpha: 0.04),
+        color: isRead
+            ? (Theme.of(context).cardTheme.color ?? Theme.of(context).colorScheme.surface)
+            : (Theme.of(context).brightness == Brightness.dark
+                ? color.withValues(alpha: 0.08)
+                : color.withValues(alpha: 0.04)),
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
           color: isRead
-              ? Colors.grey.shade100
+              ? (Theme.of(context).brightness == Brightness.dark
+                  ? const Color(0xFF2E323F)
+                  : Colors.grey.shade100)
               : color.withValues(alpha: 0.25),
           width: isRead ? 1 : 1.5,
         ),
@@ -380,7 +394,7 @@ class _NotificationCard extends StatelessWidget {
                                     ? FontWeight.w500
                                     : FontWeight.bold,
                                 fontSize: 14,
-                                color: const Color(0xFF041249),
+                                color: Theme.of(context).colorScheme.onSurface,
                               ),
                             ),
                           ),
@@ -400,7 +414,9 @@ class _NotificationCard extends StatelessWidget {
                         notification.message,
                         style: TextStyle(
                           fontSize: 13,
-                          color: Colors.grey[600],
+                          color: Theme.of(context).brightness == Brightness.dark
+                              ? const Color(0xFFE2E8F0)
+                              : Colors.grey[600],
                           height: 1.4,
                         ),
                       ),
@@ -439,7 +455,9 @@ class _NotificationCard extends StatelessWidget {
                         timeago.format(notification.timestamp, locale: 'es'),
                         style: TextStyle(
                           fontSize: 11,
-                          color: Colors.grey[400],
+                          color: Theme.of(context).brightness == Brightness.dark
+                              ? const Color(0xFF64748B)
+                              : Colors.grey[400],
                         ),
                       ),
                     ],

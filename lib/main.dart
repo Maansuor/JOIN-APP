@@ -1,7 +1,10 @@
+import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:join_app/core/providers/app_state.dart';
 import 'package:join_app/core/theme/app_theme.dart';
 import 'package:join_app/features/auth/presentation/login_screen.dart';
@@ -9,14 +12,54 @@ import 'package:join_app/features/auth/presentation/onboarding_screen.dart';
 import 'package:join_app/features/main/presentation/create_activity_screen.dart';
 import 'package:join_app/features/main/presentation/edit_activity_screen.dart';
 import 'package:join_app/features/main/presentation/main_screen.dart';
+import 'package:join_app/features/main/presentation/hennessy_assistant_screen.dart';
 import 'package:join_app/features/activity/presentation/activity_detail_screen.dart';
 import 'package:join_app/features/join_requests/presentation/join_requests_screen.dart';
 import 'package:join_app/features/activity_group/presentation/activity_group_screen.dart';
 import 'package:join_app/features/event_recap/presentation/event_photo_gallery_screen.dart';
 import 'package:join_app/features/event_recap/presentation/event_feedback_screen.dart';
+import 'package:join_app/core/services/supabase_service.dart';
+import 'package:join_app/core/services/notification_service.dart';
+import 'package:join_app/core/models/clan_model.dart';
+import 'package:join_app/features/clans/presentation/clan_chat_screen.dart';
+import 'package:join_app/features/clans/presentation/clan_info_screen.dart';
+import 'package:timeago/timeago.dart' as timeago;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Registrar locale en español para timeago
+  timeago.setLocaleMessages('es', timeago.EsMessages());
+  
+  // URL y clave de Supabase — sobreescribibles por entorno:
+  //   flutter run --dart-define=SUPABASE_URL=http://127.0.0.1:54321
+  //
+  // Por defecto se apunta al stack local de Docker. En un dispositivo físico
+  // usar 127.0.0.1 junto a `adb reverse tcp:54321 tcp:54321`, ya que 10.0.2.2
+  // sólo existe dentro del emulador de Android.
+  const urlOverride = String.fromEnvironment('SUPABASE_URL');
+  const anonKeyOverride = String.fromEnvironment('SUPABASE_ANON_KEY');
+
+  final supabaseUrl = urlOverride.isNotEmpty
+      ? urlOverride
+      : kIsWeb
+          ? 'http://localhost:54321'
+          : (Platform.isAndroid ? 'http://10.0.2.2:54321' : 'http://localhost:54321');
+
+  // Inicializar Supabase con las credenciales locales generadas por Docker
+  await Supabase.initialize(
+    url: supabaseUrl,
+    anonKey: anonKeyOverride.isNotEmpty
+        ? anonKeyOverride
+        : 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
+  );
+
+  // Asegurar la existencia de los Storage Buckets locales de Supabase
+  await SupabaseService.instance.ensureBucketsExist();
+
+  // Inicializar notificaciones locales nativas (Paso A)
+  await NotificationService.initLocalNotifications();
+
   // Inicializar datos de locale para intl/DateFormat (es_ES, en_US, etc.)
   await initializeDateFormatting();
   runApp(
@@ -45,7 +88,7 @@ class _JoinAppState extends State<JoinApp> {
 
   GoRouter _buildRouter() {
     return GoRouter(
-      initialLocation: null, // Dejar que el redirect decida a dónde ir basado en la sesión
+      initialLocation: '/login', // Dejar que el redirect decida a dónde ir basado en la sesión
       // Escucha cambios en AppState para el redirect
       refreshListenable: context.read<AppState>(),
       redirect: (context, state) {
@@ -82,6 +125,10 @@ class _JoinAppState extends State<JoinApp> {
       },
       routes: [
         GoRoute(
+          path: '/',
+          redirect: (context, state) => '/login',
+        ),
+        GoRoute(
           path: '/login',
           builder: (context, state) => const LoginScreen(),
         ),
@@ -94,6 +141,10 @@ class _JoinAppState extends State<JoinApp> {
           path: '/main',
           builder: (context, state) => const MainScreen(),
           routes: [
+            GoRoute(
+              path: 'hennessy',
+              builder: (context, state) => const HennessyAssistantScreen(),
+            ),
             GoRoute(
               path: 'activity/:id',
               builder: (context, state) {
@@ -142,6 +193,26 @@ class _JoinAppState extends State<JoinApp> {
             ),
           ],
         ),
+        GoRoute(
+          path: '/clan/:id/chat',
+          builder: (context, state) {
+            final id = state.pathParameters['id']!;
+            final clan = state.extra as Clan;
+            return ClanChatScreen(clanId: id, clan: clan);
+          },
+        ),
+        GoRoute(
+          path: '/clan/:id/info',
+          builder: (context, state) {
+            final id = state.pathParameters['id']!;
+            final clan = state.extra as Clan;
+            return ClanInfoScreen(
+              clanId: id,
+              clan: clan,
+              fromChat: state.uri.queryParameters['fromChat'] == 'true',
+            );
+          },
+        ),
       ],
     );
   }
@@ -154,10 +225,13 @@ class _JoinAppState extends State<JoinApp> {
 
   @override
   Widget build(BuildContext context) {
+    final appState = context.watch<AppState>();
     return MaterialApp.router(
       title: 'Join',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
+      darkTheme: AppTheme.dark,
+      themeMode: appState.isDarkMode ? ThemeMode.dark : ThemeMode.light,
       routerConfig: _router,
     );
   }

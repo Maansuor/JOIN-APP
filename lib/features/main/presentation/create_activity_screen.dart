@@ -7,6 +7,8 @@ import 'package:provider/provider.dart';
 import 'package:join_app/core/models/activity_model.dart';
 import 'package:join_app/core/providers/app_state.dart';
 import 'package:join_app/features/main/presentation/map_picker_screen.dart';
+import 'package:join_app/features/main/presentation/widgets/activity_form_sections.dart';
+import 'package:join_app/features/main/presentation/widgets/activity_form_premium.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:join_app/core/theme/app_colors.dart';
 import 'package:intl/intl.dart';
@@ -28,7 +30,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen>
   final _maxParticipantsController = TextEditingController(text: '10');
   final _scrollController = ScrollController();
 
-  String _selectedCategory = 'Deportes';
+  final Set<String> _selectedCategories = {'Deportes'};
   DateTime _selectedDate = DateTime.now().add(const Duration(days: 7));
   TimeOfDay _selectedTime = const TimeOfDay(hour: 10, minute: 0);
   String _selectedAgeRange = '18-35 años';
@@ -37,7 +39,22 @@ class _CreateActivityScreenState extends State<CreateActivityScreen>
   final List<String> _contributions = [];
   final _contributionController = TextEditingController();
 
-  final List<String> _categories = CategoryConstants.all;
+  // Punto de encuentro previo (opcional)
+  bool _hasSeparateMeetingPoint = false;
+  final _meetingLocationController = TextEditingController();
+  LatLng? _selectedMeetingLocation;
+
+  // Sugerencias del anfitrión
+  final List<String> _suggestions = [];
+
+  /// Categoría principal dominante (define color/ícono de la pantalla)
+  String get _selectedCategory => _selectedCategories.firstWhere(
+        CategoryConstants.groups.containsKey,
+        orElse: () => _selectedCategories.isNotEmpty
+            ? _selectedCategories.first
+            : 'Deportes',
+      );
+
   final List<String> _ageRanges = [
     'Libre',
     '18-25 años',
@@ -82,6 +99,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen>
     _locationController.dispose();
     _maxParticipantsController.dispose();
     _contributionController.dispose();
+    _meetingLocationController.dispose();
     _scrollController.dispose();
     _fabController.dispose();
     super.dispose();
@@ -89,59 +107,23 @@ class _CreateActivityScreenState extends State<CreateActivityScreen>
 
   Future<void> _selectDate(BuildContext context) async {
     HapticFeedback.selectionClick();
-    final DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: _selectedDate,
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: ColorScheme.light(
-              primary: _selectedColor,
-              onPrimary: Colors.white,
-              surface: Colors.white,
-              onSurface: AppColors.navyBlue,
-            ),
-            dialogTheme: const DialogThemeData(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.all(Radius.circular(24)),
-              ),
-            ),
-          ),
-          child: child!,
-        );
-      },
+    final picked = await showPremiumDatePicker(
+      context,
+      accent: _selectedColor,
+      initial: _selectedDate,
     );
-    if (picked != null && picked != _selectedDate) {
-      setState(() => _selectedDate = picked);
-    }
+    if (picked != null) setState(() => _selectedDate = picked);
   }
 
   Future<void> _selectTime(BuildContext context) async {
     HapticFeedback.selectionClick();
-    final TimeOfDay? picked = await showTimePicker(
-      context: context,
-      initialTime: _selectedTime,
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: ColorScheme.light(
-              primary: _selectedColor,
-              onPrimary: Colors.white,
-              surface: Colors.white,
-              onSurface: AppColors.navyBlue,
-            ),
-          ),
-          child: child!,
-        );
-      },
+    final picked = await showPremiumTimePicker(
+      context,
+      accent: _selectedColor,
+      initial: _selectedTime,
     );
-    if (picked != null && picked != _selectedTime) {
-      setState(() => _selectedTime = picked);
-    }
+    if (picked != null) setState(() => _selectedTime = picked);
   }
-
   Future<void> _selectLocation() async {
     HapticFeedback.selectionClick();
     final result = await Navigator.push<MapPickerResult>(
@@ -162,8 +144,35 @@ class _CreateActivityScreenState extends State<CreateActivityScreen>
     }
   }
 
+  Future<void> _selectMeetingLocation() async {
+    HapticFeedback.selectionClick();
+    final result = await Navigator.push<MapPickerResult>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => MapPickerScreen(
+          initialLocation: _selectedMeetingLocation ?? _selectedLocation,
+          accentColor: _selectedColor,
+        ),
+      ),
+    );
+
+    if (result != null) {
+      setState(() {
+        _selectedMeetingLocation = result.latLng;
+        _meetingLocationController.text = result.address;
+      });
+    }
+  }
+
   void _createActivity() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_hasSeparateMeetingPoint && _meetingLocationController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Elige el punto de encuentro en el mapa.'),
+        backgroundColor: AppColors.primaryOrange,
+      ));
+      return;
+    }
     HapticFeedback.mediumImpact();
     setState(() => _isLoading = true);
 
@@ -175,7 +184,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen>
         id: '', // Lo genera el backend
         title: _titleController.text,
         description: _descriptionController.text,
-        category: _selectedCategory,
+        category: _selectedCategories.join(', '),
         imageUrl: _selectedPhotoPath ?? '', // Imagen opcional o default por categoría
         maxParticipants: int.parse(_maxParticipantsController.text),
         organizerName: currentUser?.name ?? 'Usuario',
@@ -191,8 +200,19 @@ class _CreateActivityScreenState extends State<CreateActivityScreen>
         latitude: _selectedLocation?.latitude ?? -12.0464,
         longitude: _selectedLocation?.longitude ?? -77.0428,
         ageRange: _selectedAgeRange,
-        tags: [_selectedCategory.toLowerCase()],
+        tags: _selectedCategories.map((c) => c.toLowerCase()).toList(),
         contributions: _contributions,
+        suggestions: _suggestions,
+        hasSeparateMeetingPoint: _hasSeparateMeetingPoint,
+        meetingLocationName: _hasSeparateMeetingPoint
+            ? _meetingLocationController.text
+            : _locationController.text,
+        meetingLatitude: _hasSeparateMeetingPoint
+            ? _selectedMeetingLocation?.latitude
+            : _selectedLocation?.latitude,
+        meetingLongitude: _hasSeparateMeetingPoint
+            ? _selectedMeetingLocation?.longitude
+            : _selectedLocation?.longitude,
       );
 
       final created = await appState.createActivity(newActivity);
@@ -217,111 +237,15 @@ class _CreateActivityScreenState extends State<CreateActivityScreen>
   }
 
   void _showSuccessDialog() {
-    showGeneralDialog(
-      context: context,
-      barrierDismissible: false,
-      barrierLabel: '',
-      transitionDuration: const Duration(milliseconds: 350),
-      pageBuilder: (ctx, a1, a2) => const SizedBox(),
-      transitionBuilder: (ctx, animation, _, __) {
-        return ScaleTransition(
-          scale: CurvedAnimation(parent: animation, curve: Curves.easeOutBack),
-          child: FadeTransition(
-            opacity: animation,
-            child: AlertDialog(
-              backgroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(28),
-              ),
-              contentPadding: EdgeInsets.zero,
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(28),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [_selectedColor, _selectedColor.withValues(alpha: 0.7)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: const BorderRadius.vertical(
-                          top: Radius.circular(28)),
-                    ),
-                    child: Column(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.2),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.check_circle_rounded,
-                            color: Colors.white,
-                            size: 40,
-                          ),
-                        ),
-                        const SizedBox(height: 14),
-                        const Text(
-                          '¡Actividad Creada!',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      children: [
-                        Text(
-                          '${_titleController.text} está lista para recibir participantes.',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[600],
-                            height: 1.5,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 20),
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton(
-                            onPressed: () {
-                              Navigator.pop(ctx);
-                              context.go('/main');
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: _selectedColor,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              elevation: 0,
-                            ),
-                            child: const Text(
-                              '¡Genial!',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
+    showActivitySuccessDialog(
+      context,
+      accent: _selectedColor,
+      title: '¡Actividad creada! 🎉',
+      message:
+          '"${_titleController.text}" ya está lista para recibir participantes.',
+      onPrimary: () {
+        Navigator.of(context).pop();
+        context.go('/main');
       },
     );
   }
@@ -337,95 +261,12 @@ class _CreateActivityScreenState extends State<CreateActivityScreen>
             physics: const BouncingScrollPhysics(),
             slivers: [
               // ── Header con gradiente ──────────────────────────
-              SliverAppBar(
-                expandedHeight: 130,
-                pinned: true,
-                backgroundColor: _selectedColor,
-                elevation: 0,
-                leading: IconButton(
-                  icon: const Icon(Icons.close_rounded, color: Colors.white),
-                  onPressed: () => context.pop(),
-                ),
-                actions: [
-                  // Botón crear en appbar
-                  TextButton.icon(
-                    onPressed: _isLoading ? null : _createActivity,
-                    icon: _isLoading
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                                strokeWidth: 2, color: Colors.white))
-                        : const Icon(Icons.check_rounded,
-                            color: Colors.white, size: 18),
-                    label: Text(
-                      _isLoading ? 'Creando...' : 'Crear',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 15,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                ],
-                flexibleSpace: FlexibleSpaceBar(
-                  background: Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          _selectedColor,
-                          _selectedColor.withValues(alpha: 0.75),
-                        ],
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                      ),
-                    ),
-                    child: SafeArea(
-                      child: Padding(
-                        padding:
-                            const EdgeInsets.fromLTRB(20, 8, 80, 16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withValues(alpha: 0.2),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Icon(_selectedIcon,
-                                      color: Colors.white, size: 20),
-                                ),
-                                const SizedBox(width: 12),
-                                const Text(
-                                  'Nueva Actividad',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 24,
-                                    fontWeight: FontWeight.w900,
-                                    letterSpacing: -0.5,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Organiza algo increíble · $_selectedCategory',
-                              style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.75),
-                                fontSize: 13,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
+              activityFormAppBar(
+                accent: _selectedColor,
+                icon: _selectedIcon,
+                title: 'Nueva Actividad',
+                subtitle: 'Organiza algo increíble · $_selectedCategory',
+                onClose: () => context.pop(),
               ),
 
               // ── Formulario ────────────────────────────────────
@@ -438,7 +279,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen>
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         // ── Sección: Básicos ──────────────────
-                        _SectionHeader(
+                        FormSectionHeader(
                           icon: Icons.edit_note_rounded,
                           title: 'Información básica',
                           color: _selectedColor,
@@ -469,7 +310,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen>
                         const SizedBox(height: 20),
 
                         // ── Sección: Categoría ────────────────
-                        _SectionHeader(
+                        FormSectionHeader(
                           icon: Icons.category_rounded,
                           title: 'Categoría',
                           color: _selectedColor,
@@ -480,7 +321,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen>
                         const SizedBox(height: 20),
 
                         // ── Sección: Foto ─────────────────────
-                        _SectionHeader(
+                        FormSectionHeader(
                           icon: Icons.image_rounded,
                           title: 'Foto de referencia',
                           color: _selectedColor,
@@ -491,7 +332,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen>
                         const SizedBox(height: 20),
 
                         // ── Sección: Ubicación ────────────────
-                        _SectionHeader(
+                        FormSectionHeader(
                           icon: Icons.location_on_rounded,
                           title: 'Ubicación y fecha',
                           color: _selectedColor,
@@ -509,7 +350,23 @@ class _CreateActivityScreenState extends State<CreateActivityScreen>
                           validator: (v) =>
                               v == null || v.isEmpty ? 'Elegir ubicación del mapa' : null,
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 14),
+
+                        // Punto de encuentro previo (opcional)
+                        MeetingPointSection(
+                          accentColor: _selectedColor,
+                          hasSeparate: _hasSeparateMeetingPoint,
+                          onChanged: (val) => setState(() {
+                            _hasSeparateMeetingPoint = val;
+                            if (!val) {
+                              _meetingLocationController.clear();
+                              _selectedMeetingLocation = null;
+                            }
+                          }),
+                          controller: _meetingLocationController,
+                          onPickOnMap: _selectMeetingLocation,
+                        ),
+                        const SizedBox(height: 14),
 
                         // Fecha + Hora
                         Row(
@@ -541,7 +398,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen>
                         const SizedBox(height: 20),
 
                         // ── Sección: Participantes ────────────
-                        _SectionHeader(
+                        FormSectionHeader(
                           icon: Icons.people_alt_rounded,
                           title: 'Participantes y edad',
                           color: _selectedColor,
@@ -570,7 +427,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen>
                         const SizedBox(height: 20),
 
                         // ── Sección: Aportes ──────────────────
-                        _SectionHeader(
+                        FormSectionHeader(
                           icon: Icons.card_giftcard_rounded,
                           title: 'Aportes necesarios',
                           color: _selectedColor,
@@ -579,6 +436,25 @@ class _CreateActivityScreenState extends State<CreateActivityScreen>
                         const SizedBox(height: 12),
 
                         _buildContributionsSection(),
+                        const SizedBox(height: 20),
+
+                        // ── Sección: Sugerencias del anfitrión ─
+                        FormSectionHeader(
+                          icon: Icons.tips_and_updates_rounded,
+                          title: 'Sugerencias',
+                          color: _selectedColor,
+                          subtitle: 'Para los que se unen',
+                        ),
+                        const SizedBox(height: 12),
+
+                        HostSuggestionsSection(
+                          accentColor: _selectedColor,
+                          selectedCategories: _selectedCategories,
+                          suggestions: _suggestions,
+                          onAdd: (s) => setState(() => _suggestions.add(s)),
+                          onRemove: (s) =>
+                              setState(() => _suggestions.remove(s)),
+                        ),
                         const SizedBox(height: 28),
 
                         // ── Botón principal ───────────────────
@@ -592,75 +468,28 @@ class _CreateActivityScreenState extends State<CreateActivityScreen>
             ],
           ),
 
-          // ── Tips flotante ─────────────────────────────────────
-          _buildTipsFab(),
+          // ── Tips flotante (mascota) arriba a la derecha ───────
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 78,
+            right: 16,
+            child: MascotTipsButton(
+              accent: _selectedColor,
+              category: _selectedCategory,
+            ),
+          ),
         ],
       ),
     );
   }
 
   Widget _buildCategorySelector() {
-    return Wrap(
-      spacing: 10,
-      runSpacing: 10,
-      children: _categories.map((cat) {
-        final isSelected = _selectedCategory == cat;
-        final color = _catColors[cat] ?? AppColors.primaryOrange;
-        final icon = _catIcons[cat] ?? Icons.category;
-        return GestureDetector(
-          onTap: () {
-            HapticFeedback.selectionClick();
-            setState(() => _selectedCategory = cat);
-          },
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            padding:
-                const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: isSelected ? color : Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: isSelected ? color : Colors.grey.shade200,
-                width: isSelected ? 0 : 1,
-              ),
-              boxShadow: isSelected
-                  ? [
-                      BoxShadow(
-                        color: color.withValues(alpha: 0.4),
-                        blurRadius: 12,
-                        offset: const Offset(0, 4),
-                      ),
-                    ]
-                  : [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.04),
-                        blurRadius: 6,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  icon,
-                  size: 16,
-                  color: isSelected ? Colors.white : color,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  cat,
-                  style: TextStyle(
-                    color: isSelected ? Colors.white : color,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      }).toList(),
+    return GroupedCategoryPicker(
+      selected: _selectedCategories,
+      onChanged: (next) => setState(() {
+        _selectedCategories
+          ..clear()
+          ..addAll(next);
+      }),
     );
   }
 
@@ -848,11 +677,30 @@ class _CreateActivityScreenState extends State<CreateActivityScreen>
 
   Widget _buildImage(String path) {
     if (path.startsWith('http')) {
-      return Image.network(path, fit: BoxFit.cover);
+      return Image.network(
+        path,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) =>
+            Image.asset('assets/images/placeholder.png', fit: BoxFit.cover),
+      );
     } else if (path.startsWith('assets/')) {
-      return Image.asset(path, fit: BoxFit.cover);
+      return Image.asset(
+        path,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) =>
+            Image.asset('assets/images/placeholder.png', fit: BoxFit.cover),
+      );
     } else {
-      return Image.file(File(path), fit: BoxFit.cover);
+      final file = File(path);
+      if (!file.existsSync()) {
+        return Image.asset('assets/images/placeholder.png', fit: BoxFit.cover);
+      }
+      return Image.file(
+        file,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) =>
+            Image.asset('assets/images/placeholder.png', fit: BoxFit.cover),
+      );
     }
   }
 
@@ -1104,322 +952,11 @@ class _CreateActivityScreenState extends State<CreateActivityScreen>
       ),
     );
   }
-
-  Widget _buildTipsFab() {
-    final recs = _getRecommendationsForCategory(_selectedCategory);
-    if (recs.isEmpty) return const SizedBox.shrink();
-
-    return Positioned(
-      right: 20,
-      bottom: 20,
-      child: GestureDetector(
-        onTap: () => _showTipsModal(recs),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 300),
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [_selectedColor, _selectedColor.withValues(alpha: 0.75)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(24),
-            boxShadow: [
-              BoxShadow(
-                color: _selectedColor.withValues(alpha: 0.5),
-                blurRadius: 16,
-                offset: const Offset(0, 6),
-              ),
-            ],
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(5),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.2),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.lightbulb_rounded,
-                    color: Colors.white, size: 18),
-              ),
-              const SizedBox(width: 10),
-              const Text(
-                'Tips',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showTipsModal(List<String> recs) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (ctx) => Container(
-        margin: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(28),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [_selectedColor, _selectedColor.withValues(alpha: 0.75)],
-                ),
-                borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(28)),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Icon(_selectedIcon,
-                        color: Colors.white, size: 24),
-                  ),
-                  const SizedBox(width: 14),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Recomendaciones Pro',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      Text(
-                        _selectedCategory.toUpperCase(),
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.75),
-                          fontSize: 11,
-                          letterSpacing: 1.5,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                children: [
-                  ...recs.asMap().entries.map((e) {
-                    return TweenAnimationBuilder<double>(
-                      tween: Tween(begin: 0.0, end: 1.0),
-                      duration:
-                          Duration(milliseconds: 300 + e.key * 80),
-                      curve: Curves.easeOut,
-                      builder: (_, value, child) => Opacity(
-                        opacity: value,
-                        child: Transform.translate(
-                          offset: Offset(20 * (1 - value), 0),
-                          child: child,
-                        ),
-                      ),
-                      child: Container(
-                        margin: const EdgeInsets.only(bottom: 10),
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: _selectedColor.withValues(alpha: 0.05),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: _selectedColor.withValues(alpha: 0.15),
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 32,
-                              height: 32,
-                              decoration: BoxDecoration(
-                                color: _selectedColor
-                                    .withValues(alpha: 0.12),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Center(
-                                child: Text(
-                                  '${e.key + 1}',
-                                  style: TextStyle(
-                                    color: _selectedColor,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 14,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                e.value,
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  height: 1.4,
-                                  color: AppColors.navyBlue,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  }),
-                  const SizedBox(height: 10),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () => Navigator.pop(ctx),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: _selectedColor,
-                        foregroundColor: Colors.white,
-                        padding:
-                            const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        elevation: 0,
-                      ),
-                      child: const Text(
-                        '¡Entendido, gracias!',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  List<String> _getRecommendationsForCategory(String category) {
-    switch (category) {
-      case 'Deportes':
-        return [
-          'Lleva agua suficiente para todos los participantes',
-          'No olvides protector solar y ropa cómoda',
-          'Considera llevar un botiquín de primeros auxilios',
-          'Confirma el nivel físico requerido en la descripción',
-        ];
-      case 'Comida':
-        return [
-          'Verifica restricciones alimentarias de los participantes',
-          'Lleva servilletas y cubiertos de más',
-          'Incluye opciones vegetarianas/veganas',
-          'No olvides bolsas para la basura y mantener el lugar limpio',
-        ];
-      case 'Naturaleza':
-        return [
-          'Lleva repelente de insectos y protector solar',
-          'Trae una manta o silla plegable para descansar',
-          'No olvides bolsa para tu basura (deja el lugar mejor de cómo lo encontraste)',
-          'Llevar una linterna si la actividad puede extenderse',
-        ];
-      case 'Chill':
-        return [
-          'Prepara una playlist colaborativa con los participantes',
-          'Lleva juegos de mesa o cartas para romper el hielo',
-          'Ten opciones de bebidas calientes y frías',
-          'Considera la comodidad del espacio para todos',
-        ];
-      case 'Juntas':
-        return [
-          'Establece un punto de encuentro exacto y visible',
-          'Considera transporte compartido o comparte rutas',
-          'Ten un plan B en caso de cambios de clima o lugar',
-          'Lleva un powerbank extra para mantener la comunicación',
-        ];
-      default:
-        return [];
-    }
-  }
 }
 
 // ══════════════════════════════════════════════════════════════
 //  Widgets auxiliares premium
 // ══════════════════════════════════════════════════════════════
-
-class _SectionHeader extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final Color color;
-  final String? subtitle;
-
-  const _SectionHeader({
-    required this.icon,
-    required this.title,
-    required this.color,
-    this.subtitle,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(7),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Icon(icon, size: 16, color: color),
-        ),
-        const SizedBox(width: 10),
-        Text(
-          title,
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w800,
-            color: AppColors.navyBlue,
-            letterSpacing: -0.2,
-          ),
-        ),
-        if (subtitle != null) ...[
-          const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(
-              color: Colors.grey[100],
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              subtitle!,
-              style: TextStyle(
-                fontSize: 11,
-                color: Colors.grey[500],
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-}
 
 class _PremiumField extends StatelessWidget {
   final TextEditingController controller;

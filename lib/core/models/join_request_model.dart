@@ -54,26 +54,45 @@ class JoinRequest {
 
   /// Crea un JoinRequest desde un mapa JSON
   factory JoinRequest.fromJson(Map<String, dynamic> json) {
+    final activityId = (json['activityId'] ?? json['activity_id'] ?? '') as String;
+    final userId = (json['userId'] ?? json['user_id'] ?? '') as String;
+    final userName = (json['userName'] ?? json['user_name'] ?? json['display_name'] ?? '') as String;
+    final userImageUrl = (json['userImageUrl'] ?? json['user_image_url'] ?? json['profile_image_url'] ?? '') as String;
+    final userRating = (json['userRating'] ?? json['user_rating'] ?? json['rating'] ?? 0.0) as num;
+    final message = json['message'] as String? ?? '';
+    
+    final requestedAtStr = (json['requestedAt'] ?? json['requested_at']) as String?;
+    final requestedAt = requestedAtStr != null ? DateTime.parse(requestedAtStr) : DateTime.now();
+
+    final statusVal = (json['status'] as String? ?? 'pending');
+    final status = JoinRequestStatusX.fromString(statusVal);
+
+    final respondedAtStr = (json['respondedAt'] ?? json['responded_at']) as String?;
+    final respondedAt = respondedAtStr != null ? DateTime.parse(respondedAtStr) : null;
+
+    final respondedBy = (json['respondedBy'] ?? json['responded_by']) as String?;
+    final responseMessage = (json['responseMessage'] ?? json['response_message']) as String?;
+
+    final userBirthDateStr = (json['userBirthDate'] ?? json['user_birth_date'] ?? json['birth_date']) as String?;
+    final userBirthDate = userBirthDateStr != null ? DateTime.parse(userBirthDateStr) : null;
+
+    final userGender = (json['userGender'] ?? json['user_gender'] ?? json['gender']) as String?;
+
     return JoinRequest(
       id: json['id'] as String,
-      activityId: json['activityId'] as String,
-      userId: json['userId'] as String,
-      userName: json['userName'] as String? ?? '',
-      userImageUrl: json['userImageUrl'] as String? ?? '',
-      userRating: (json['userRating'] as num?)?.toDouble() ?? 0.0,
-      message: json['message'] as String? ?? '',
-      requestedAt: DateTime.parse(json['requestedAt'] as String),
-      status:
-          JoinRequestStatusX.fromString(json['status'] as String? ?? 'pending'),
-      respondedAt: json['respondedAt'] != null
-          ? DateTime.parse(json['respondedAt'] as String)
-          : null,
-      respondedBy: json['respondedBy'] as String?,
-      responseMessage: json['responseMessage'] as String?,
-      userBirthDate: json['userBirthDate'] != null
-          ? DateTime.parse(json['userBirthDate'] as String)
-          : null,
-      userGender: json['userGender'] as String?,
+      activityId: activityId,
+      userId: userId,
+      userName: userName,
+      userImageUrl: userImageUrl,
+      userRating: userRating.toDouble(),
+      message: message,
+      requestedAt: requestedAt,
+      status: status,
+      respondedAt: respondedAt,
+      respondedBy: respondedBy,
+      responseMessage: responseMessage,
+      userBirthDate: userBirthDate,
+      userGender: userGender,
     );
   }
 

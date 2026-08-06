@@ -1,11 +1,16 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:join_app/core/models/activity_model.dart';
+import 'package:join_app/core/models/clan_model.dart';
 import 'package:join_app/core/providers/app_state.dart';
+import 'package:join_app/core/services/encryption_service.dart';
 import 'package:join_app/core/theme/app_colors.dart';
 import 'package:intl/intl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Pantalla de Chats Premium
 class ChatsScreen extends StatefulWidget {
@@ -49,60 +54,113 @@ class _ChatsScreenState extends State<ChatsScreen>
             a.title.toLowerCase().contains(_searchQuery.toLowerCase()))
         .toList();
 
+    // Clanes del usuario — acceso rápido a sus chats privados
+    final clans = appState.userClans
+        .where((c) =>
+            _searchQuery.isEmpty ||
+            c.name.toLowerCase().contains(_searchQuery.toLowerCase()))
+        .toList();
+    final totalChats = chatActivities.length + clans.length;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F6FA),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: CustomScrollView(
         physics: const BouncingScrollPhysics(),
         slivers: [
           // ── AppBar premium con gradiente ──────────────────────
           SliverAppBar(
-            expandedHeight: 140,
+            expandedHeight: 95,
             floating: false,
             pinned: true,
             backgroundColor: Colors.transparent,
             elevation: 0,
-            flexibleSpace: LayoutBuilder(
-              builder: (context, constraints) {
-                final isCollapsed = constraints.maxHeight <= kToolbarHeight + 10;
-                return FlexibleSpaceBar(
-                  background: _buildHeader(),
-                  titlePadding: const EdgeInsets.fromLTRB(20, 0, 20, 14),
-                  title: AnimatedOpacity(
-                    opacity: isCollapsed ? 1.0 : 0.0,
-                    duration: const Duration(milliseconds: 200),
-                    child: const Text(
-                      'Mensajes',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
+            flexibleSpace: ClipRRect(
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final isCollapsed = constraints.maxHeight <= kToolbarHeight + 10;
+                    return FlexibleSpaceBar(
+                      background: _buildHeader(),
+                      titlePadding: const EdgeInsets.fromLTRB(20, 0, 20, 14),
+                      title: AnimatedOpacity(
+                        opacity: isCollapsed ? 1.0 : 0.0,
+                        duration: const Duration(milliseconds: 200),
+                        child: ShaderMask(
+                          shaderCallback: (bounds) => const LinearGradient(
+                            colors: [AppColors.primaryOrange, Color(0xFFFF2D55)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ).createShader(bounds),
+                          child: Text(
+                            'Mensajes',
+                            style: GoogleFonts.outfit(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: -0.2,
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+            actions: [
+              Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: Center(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(14),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).brightness == Brightness.dark
+                              ? Colors.white.withValues(alpha: 0.1)
+                              : AppColors.navyBlue.withValues(alpha: 0.06),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: Theme.of(context).brightness == Brightness.dark
+                                ? Colors.white.withValues(alpha: 0.12)
+                                : AppColors.navyBlue.withValues(alpha: 0.08),
+                            width: 1,
+                          ),
+                        ),
+                        child: IconButton(
+                          constraints: const BoxConstraints(
+                            minWidth: 40,
+                            minHeight: 40,
+                          ),
+                          padding: EdgeInsets.zero,
+                          icon: AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 200),
+                            child: Icon(
+                              _showSearch ? Icons.close : Icons.search_rounded,
+                              key: ValueKey(_showSearch),
+                              color: Theme.of(context).brightness == Brightness.dark
+                                  ? Colors.white
+                                  : AppColors.navyBlue,
+                              size: 20,
+                            ),
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              _showSearch = !_showSearch;
+                              if (!_showSearch) {
+                                _searchQuery = '';
+                                _searchCtrl.clear();
+                              }
+                            });
+                          },
+                        ),
                       ),
                     ),
                   ),
-                );
-              },
-            ),
-            actions: [
-              IconButton(
-                icon: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 200),
-                  child: Icon(
-                    _showSearch ? Icons.close : Icons.search_rounded,
-                    key: ValueKey(_showSearch),
-                    color: Colors.white,
-                  ),
                 ),
-                onPressed: () {
-                  setState(() {
-                    _showSearch = !_showSearch;
-                    if (!_showSearch) {
-                      _searchQuery = '';
-                      _searchCtrl.clear();
-                    }
-                  });
-                },
               ),
-              const SizedBox(width: 4),
             ],
           ),
 
@@ -114,15 +172,17 @@ class _ChatsScreenState extends State<ChatsScreen>
                 child: TextField(
                   controller: _searchCtrl,
                   autofocus: true,
-                  style: const TextStyle(
-                    color: AppColors.navyBlue,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurface,
                     fontSize: 15,
                     fontWeight: FontWeight.w500,
                   ),
                   decoration: InputDecoration(
                     hintText: 'Buscar en chats...',
                     hintStyle: TextStyle(
-                      color: AppColors.navyBlue.withValues(alpha: 0.4),
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? const Color(0xFF94A3B8)
+                          : AppColors.navyBlue.withValues(alpha: 0.4),
                     ),
                     prefixIcon: const Icon(
                       Icons.search_rounded,
@@ -130,7 +190,9 @@ class _ChatsScreenState extends State<ChatsScreen>
                       size: 20,
                     ),
                     filled: true,
-                    fillColor: Colors.white,
+                    fillColor: Theme.of(context).brightness == Brightness.dark
+                        ? const Color(0xFF1E222B)
+                        : Colors.white,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(16),
                       borderSide: BorderSide.none,
@@ -144,23 +206,23 @@ class _ChatsScreenState extends State<ChatsScreen>
             ),
 
           // ── Contador de chats activos ─────────────────────────
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-              child: Row(
-                children: [
-                  Text(
-                    chatActivities.isEmpty
-                        ? 'Sin chats activos'
-                        : '${chatActivities.length} chat${chatActivities.length == 1 ? '' : 's'} activo${chatActivities.length == 1 ? '' : 's'}',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Colors.grey[600],
-                      fontWeight: FontWeight.w500,
+          if (totalChats > 0)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                child: Row(
+                  children: [
+                    Text(
+                      '$totalChats chat${totalChats == 1 ? '' : 's'} activo${totalChats == 1 ? '' : 's'}',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? const Color(0xFF94A3B8)
+                            : Colors.grey[600],
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  if (chatActivities.isNotEmpty)
+                    const SizedBox(width: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 8, vertical: 2),
@@ -169,7 +231,7 @@ class _ChatsScreenState extends State<ChatsScreen>
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
-                        '${chatActivities.length}',
+                        '$totalChats',
                         style: const TextStyle(
                           fontSize: 11,
                           color: AppColors.primaryOrange,
@@ -177,13 +239,43 @@ class _ChatsScreenState extends State<ChatsScreen>
                         ),
                       ),
                     ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
+
+          // ── Sección: Clanes ───────────────────────────────────
+          if (clans.isNotEmpty) ...[
+            SliverToBoxAdapter(
+              child: _buildSectionLabel(
+                  context, Icons.shield_rounded, 'Tus Clanes', clans.length),
+            ),
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) => _ClanChatCard(
+                    clan: clans[index],
+                    index: index,
+                    onTap: () => context.push(
+                        '/clan/${clans[index].id}/chat',
+                        extra: clans[index]),
+                  ),
+                  childCount: clans.length,
+                ),
+              ),
+            ),
+          ],
+
+          // ── Sección: Planes / actividades ─────────────────────
+          if (chatActivities.isNotEmpty && clans.isNotEmpty)
+            SliverToBoxAdapter(
+              child: _buildSectionLabel(context, Icons.event_rounded,
+                  'Tus Planes', chatActivities.length),
+            ),
 
           // ── Contenido ─────────────────────────────────────────
-          chatActivities.isEmpty
+          totalChats == 0
               ? SliverFillRemaining(
                   child: _buildEmptyState(context),
                 )
@@ -212,6 +304,38 @@ class _ChatsScreenState extends State<ChatsScreen>
     );
   }
 
+  Widget _buildSectionLabel(
+      BuildContext context, IconData icon, String label, int count) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 10, 20, 10),
+      child: Row(
+        children: [
+          Icon(icon, size: 15, color: AppColors.primaryOrange),
+          const SizedBox(width: 7),
+          Text(
+            label.toUpperCase(),
+            style: TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.1,
+              color: isDark ? const Color(0xFF94A3B8) : Colors.grey[600],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Container(
+              height: 1,
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.06)
+                  : Colors.black.withValues(alpha: 0.05),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildHeader() {
     return AnimatedBuilder(
       animation: _headerController,
@@ -219,29 +343,32 @@ class _ChatsScreenState extends State<ChatsScreen>
         final t = _headerController.value;
         return Container(
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                AppColors.deepBlue,
-                Color.lerp(AppColors.navyBlue, AppColors.skyBlue, t * 0.3)!,
-              ],
+            color: Theme.of(context).brightness == Brightness.dark
+                ? const Color(0xFF161920).withValues(alpha: 0.82)
+                : Colors.white.withValues(alpha: 0.82),
+            border: Border(
+              bottom: BorderSide(
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? Colors.white.withValues(alpha: 0.04)
+                    : Colors.black.withValues(alpha: 0.04),
+                width: 1,
+              ),
             ),
           ),
           child: Stack(
             children: [
-              // Orbe decorativo
+              // Orbe decorativo muy suave y elegante en la esquina
               Positioned(
-                right: -40 + t * 20,
-                top: -30 + t * 10,
+                right: -20 + t * 15,
+                top: -20 + t * 10,
                 child: Container(
-                  width: 200,
-                  height: 200,
+                  width: 120,
+                  height: 120,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     gradient: RadialGradient(
                       colors: [
-                        AppColors.primaryOrange.withValues(alpha: 0.25),
+                        AppColors.primaryOrange.withValues(alpha: 0.15),
                         AppColors.primaryOrange.withValues(alpha: 0.0),
                       ],
                     ),
@@ -250,8 +377,9 @@ class _ChatsScreenState extends State<ChatsScreen>
               ),
               // Contenido
               SafeArea(
+                bottom: false,
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 16, 80, 16),
+                  padding: const EdgeInsets.fromLTRB(20, 0, 80, 10),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.end,
@@ -259,35 +387,56 @@ class _ChatsScreenState extends State<ChatsScreen>
                       Row(
                         children: [
                           Container(
-                            padding: const EdgeInsets.all(8),
+                            padding: const EdgeInsets.all(6),
                             decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(12),
+                              gradient: const LinearGradient(
+                                colors: [AppColors.primaryOrange, Color(0xFFFF2D55)],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              borderRadius: BorderRadius.circular(10),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppColors.primaryOrange.withValues(alpha: 0.2),
+                                  blurRadius: 6,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
                             ),
                             child: const Icon(
                               Icons.chat_bubble_rounded,
                               color: Colors.white,
-                              size: 20,
+                              size: 14,
                             ),
                           ),
-                          const SizedBox(width: 12),
-                          const Text(
-                            'Mensajes',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 28,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: -0.5,
+                          const SizedBox(width: 8),
+                          ShaderMask(
+                            shaderCallback: (bounds) => const LinearGradient(
+                              colors: [AppColors.primaryOrange, Color(0xFFFF2D55)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ).createShader(bounds),
+                            child: Text(
+                              'Mensajes',
+                              style: GoogleFonts.outfit(
+                                color: Colors.white,
+                                fontSize: 24,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: -0.2,
+                              ),
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 2),
                       Text(
                         'Conversaciones de tus actividades',
                         style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.65),
-                          fontSize: 13,
+                          color: Theme.of(context).brightness == Brightness.dark
+                              ? const Color(0xFF94A3B8)
+                              : AppColors.navyBlue.withValues(alpha: 0.5),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ],
@@ -337,12 +486,12 @@ class _ChatsScreenState extends State<ChatsScreen>
                   duration: 2000.ms,
                   curve: Curves.easeInOut),
           const SizedBox(height: 28),
-          const Text(
+          Text(
             'Sin chats por ahora',
             style: TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.w900,
-              color: AppColors.navyBlue,
+              color: Theme.of(context).colorScheme.onSurface,
               letterSpacing: -0.3,
             ),
           ),
@@ -351,7 +500,9 @@ class _ChatsScreenState extends State<ChatsScreen>
             'Únete a una actividad para\nchatear con el grupo',
             style: TextStyle(
               fontSize: 14,
-              color: AppColors.navyBlue.withValues(alpha: 0.5),
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? const Color(0xFF94A3B8)
+                  : AppColors.navyBlue.withValues(alpha: 0.5),
               height: 1.6,
             ),
             textAlign: TextAlign.center,
@@ -477,17 +628,19 @@ class _PremiumChatCardState extends State<_PremiumChatCard> {
       onTapCancel: () => setState(() => _pressed = false),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 130),
-        transform: Matrix4.identity()..scale(_pressed ? 0.98 : 1.0),
+        transform: Matrix4.diagonal3Values(_pressed ? 0.98 : 1.0, _pressed ? 0.98 : 1.0, 1.0),
         transformAlignment: Alignment.center,
         margin: const EdgeInsets.only(bottom: 10),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: Theme.of(context).cardTheme.color ?? Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(20),
           boxShadow: _pressed
               ? []
               : [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.06),
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.black.withValues(alpha: 0.2)
+                        : Colors.black.withValues(alpha: 0.06),
                     blurRadius: 16,
                     offset: const Offset(0, 4),
                   ),
@@ -533,7 +686,12 @@ class _PremiumChatCardState extends State<_PremiumChatCard> {
                       decoration: BoxDecoration(
                         color: _categoryColor,
                         shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 2),
+                        border: Border.all(
+                          color: Theme.of(context).brightness == Brightness.dark
+                              ? const Color(0xFF161920)
+                              : Colors.white,
+                          width: 2,
+                        ),
                       ),
                       child: Center(
                         child: Icon(
@@ -557,7 +715,12 @@ class _PremiumChatCardState extends State<_PremiumChatCard> {
                             colors: [AppColors.primaryOrange, AppColors.lightOrange],
                           ),
                           shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 2),
+                          border: Border.all(
+                            color: Theme.of(context).brightness == Brightness.dark
+                                ? const Color(0xFF161920)
+                                : Colors.white,
+                            width: 2,
+                          ),
                           boxShadow: [
                             BoxShadow(
                               color: AppColors.primaryOrange.withValues(alpha: 0.4),
@@ -598,7 +761,7 @@ class _PremiumChatCardState extends State<_PremiumChatCard> {
                                   ? FontWeight.w800
                                   : FontWeight.w600,
                               fontSize: 15,
-                              color: AppColors.navyBlue,
+                              color: Theme.of(context).colorScheme.onSurface,
                               letterSpacing: -0.2,
                             ),
                             maxLines: 1,
@@ -645,8 +808,12 @@ class _PremiumChatCardState extends State<_PremiumChatCard> {
                       style: TextStyle(
                         fontSize: 13,
                         color: _unread > 0
-                            ? AppColors.navyBlue.withValues(alpha: 0.75)
-                            : Colors.grey[400],
+                            ? (Theme.of(context).brightness == Brightness.dark
+                                ? const Color(0xFFF8FAFC)
+                                : AppColors.navyBlue.withValues(alpha: 0.75))
+                            : (Theme.of(context).brightness == Brightness.dark
+                                ? const Color(0xFF64748B)
+                                : Colors.grey[400]),
                         fontWeight: _unread > 0
                             ? FontWeight.w500
                             : FontWeight.normal,
@@ -660,14 +827,18 @@ class _PremiumChatCardState extends State<_PremiumChatCard> {
                         Icon(
                           Icons.people_alt_rounded,
                           size: 13,
-                          color: Colors.grey[400],
+                          color: Theme.of(context).brightness == Brightness.dark
+                              ? const Color(0xFF64748B)
+                              : Colors.grey[400],
                         ),
                         const SizedBox(width: 4),
                         Text(
                           '${widget.activity.currentParticipants} participantes',
                           style: TextStyle(
                             fontSize: 11,
-                            color: Colors.grey[500],
+                            color: Theme.of(context).brightness == Brightness.dark
+                                ? const Color(0xFF94A3B8)
+                                : Colors.grey[500],
                             fontWeight: FontWeight.w500,
                           ),
                         ),
@@ -676,7 +847,9 @@ class _PremiumChatCardState extends State<_PremiumChatCard> {
                           width: 3,
                           height: 3,
                           decoration: BoxDecoration(
-                            color: Colors.grey[300],
+                            color: Theme.of(context).brightness == Brightness.dark
+                                ? const Color(0xFF2E323F)
+                                : Colors.grey[300],
                             shape: BoxShape.circle,
                           ),
                         ),
@@ -708,7 +881,9 @@ class _PremiumChatCardState extends State<_PremiumChatCard> {
                 width: 32,
                 height: 32,
                 decoration: BoxDecoration(
-                  color: AppColors.primaryOrange.withValues(alpha: 0.08),
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? AppColors.primaryOrange.withValues(alpha: 0.15)
+                      : AppColors.primaryOrange.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: const Icon(
@@ -742,5 +917,244 @@ class _PremiumChatCardState extends State<_PremiumChatCard> {
       default:
         return Icons.category;
     }
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+//  Tarjeta de chat de Clan — acceso rápido desde Mensajes
+// ══════════════════════════════════════════════════════════════
+class _ClanChatCard extends StatefulWidget {
+  final Clan clan;
+  final int index;
+  final VoidCallback onTap;
+
+  const _ClanChatCard({
+    required this.clan,
+    required this.index,
+    required this.onTap,
+  });
+
+  @override
+  State<_ClanChatCard> createState() => _ClanChatCardState();
+}
+
+class _ClanChatCardState extends State<_ClanChatCard> {
+  bool _pressed = false;
+  late final Future<Map<String, dynamic>?> _lastMessageFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _lastMessageFuture = Supabase.instance.client
+        .from('clan_messages')
+        .select('message, sent_at')
+        .eq('clan_id', widget.clan.id)
+        .order('sent_at', ascending: false)
+        .limit(1)
+        .maybeSingle();
+  }
+
+  static const _clanGradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [Color(0xFF7C3AED), Color(0xFFFD7C36)],
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) {
+        setState(() => _pressed = false);
+        widget.onTap();
+      },
+      onTapCancel: () => setState(() => _pressed = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 130),
+        transform: Matrix4.diagonal3Values(
+            _pressed ? 0.98 : 1.0, _pressed ? 0.98 : 1.0, 1.0),
+        transformAlignment: Alignment.center,
+        margin: const EdgeInsets.only(bottom: 10),
+        decoration: BoxDecoration(
+          color: Theme.of(context).cardTheme.color ??
+              Theme.of(context).colorScheme.surface,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: const Color(0xFF7C3AED).withValues(alpha: 0.18),
+          ),
+          boxShadow: _pressed
+              ? []
+              : [
+                  BoxShadow(
+                    color: isDark
+                        ? Colors.black.withValues(alpha: 0.2)
+                        : const Color(0xFF7C3AED).withValues(alpha: 0.08),
+                    blurRadius: 16,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              // Avatar del clan con escudo
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Container(
+                    width: 58,
+                    height: 58,
+                    decoration: BoxDecoration(
+                      gradient: _clanGradient,
+                      borderRadius: BorderRadius.circular(18),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF7C3AED).withValues(alpha: 0.3),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: widget.clan.avatarUrl != null &&
+                            widget.clan.avatarUrl!.isNotEmpty
+                        ? ClipRRect(
+                            borderRadius: BorderRadius.circular(18),
+                            child: Image.network(widget.clan.avatarUrl!,
+                                fit: BoxFit.cover),
+                          )
+                        : Center(
+                            child: Text(
+                              widget.clan.name.substring(0, 1).toUpperCase(),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 24,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                  ),
+                  Positioned(
+                    bottom: -3,
+                    right: -3,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF7C3AED),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color:
+                              isDark ? const Color(0xFF161920) : Colors.white,
+                          width: 2,
+                        ),
+                      ),
+                      child: const Icon(Icons.shield_rounded,
+                          size: 10, color: Colors.white),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 14),
+
+              // Nombre + último mensaje
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.clan.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.outfit(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: isDark ? Colors.white : const Color(0xFF041249),
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    FutureBuilder<Map<String, dynamic>?>(
+                      future: _lastMessageFuture,
+                      builder: (context, snap) {
+                        final raw = snap.data?['message'] as String?;
+                        final preview = raw == null
+                            ? 'Sé el primero en escribir 👋'
+                            : EncryptionService.decryptText(raw);
+                        return Text(
+                          preview,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            color: isDark
+                                ? const Color(0xFF94A3B8)
+                                : Colors.grey[600],
+                            fontStyle: raw == null
+                                ? FontStyle.italic
+                                : FontStyle.normal,
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+
+              // Hora + insignia CLAN
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  FutureBuilder<Map<String, dynamic>?>(
+                    future: _lastMessageFuture,
+                    builder: (context, snap) {
+                      final sentAt = snap.data?['sent_at'] as String?;
+                      if (sentAt == null) return const SizedBox(height: 14);
+                      final dt = DateTime.tryParse(sentAt)?.toLocal();
+                      if (dt == null) return const SizedBox(height: 14);
+                      final now = DateTime.now();
+                      final sameDay = dt.year == now.year &&
+                          dt.month == now.month &&
+                          dt.day == now.day;
+                      return Text(
+                        sameDay
+                            ? DateFormat('HH:mm').format(dt)
+                            : DateFormat('dd/MM').format(dt),
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: isDark
+                              ? const Color(0xFF64748B)
+                              : Colors.grey[500],
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 6),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      gradient: _clanGradient,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Text(
+                      'CLAN',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 8.5,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    ).animate(delay: (widget.index * 60).ms).fadeIn().slideY(begin: 0.08);
   }
 }

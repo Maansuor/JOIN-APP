@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -120,16 +121,27 @@ class _EditProfileScreenState extends State<EditProfileScreen>
       helpText: 'Fecha de nacimiento',
       cancelText: 'Cancelar',
       confirmText: 'Confirmar',
-      builder: (ctx, child) => Theme(
-        data: Theme.of(ctx).copyWith(
-          colorScheme: const ColorScheme.light(
-            primary: AppColors.primaryOrange,
-            onPrimary: Colors.white,
-            surface: Colors.white,
+      builder: (ctx, child) {
+        final isDarkTheme = Theme.of(ctx).brightness == Brightness.dark;
+        return Theme(
+          data: Theme.of(ctx).copyWith(
+            colorScheme: isDarkTheme
+                ? const ColorScheme.dark(
+                    primary: AppColors.primaryOrange,
+                    onPrimary: Colors.white,
+                    surface: Color(0xFF161920),
+                    onSurface: Colors.white,
+                  )
+                : const ColorScheme.light(
+                    primary: AppColors.primaryOrange,
+                    onPrimary: Colors.white,
+                    surface: Colors.white,
+                    onSurface: Color(0xFF041249),
+                  ),
           ),
-        ),
-        child: child!,
-      ),
+          child: child!,
+        );
+      },
     );
     if (picked != null) setState(() => _birthDate = picked);
   }
@@ -223,6 +235,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
 
   Widget _buildAvatar() {
     final user = context.watch<AppState>().currentUser;
+    final isDarkAvatar = Theme.of(context).brightness == Brightness.dark;
     return Center(
       child: Stack(
         children: [
@@ -231,16 +244,12 @@ class _EditProfileScreenState extends State<EditProfileScreen>
             height: 120,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              gradient: const LinearGradient(
-                colors: [AppColors.primaryOrange, Color(0xFFFF8A50)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
+              border: Border.all(color: isDarkAvatar ? const Color(0xFF161920) : Colors.white, width: 4),
               boxShadow: [
                 BoxShadow(
-                  color: AppColors.primaryOrange.withValues(alpha: 0.4),
-                  blurRadius: 25,
-                  offset: const Offset(0, 10),
+                  color: isDarkAvatar ? Colors.black.withValues(alpha: 0.3) : const Color(0xFF041249).withValues(alpha: 0.15),
+                  blurRadius: 20,
+                  offset: const Offset(0, 8),
                 ),
               ],
             ),
@@ -268,7 +277,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
               child: Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: isDarkAvatar ? const Color(0xFF1E222B) : Colors.white,
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
@@ -375,8 +384,11 @@ class _EditProfileScreenState extends State<EditProfileScreen>
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FB),
+      backgroundColor: isDark ? const Color(0xFF0A0D14) : const Color(0xFFF5F7FB),
       body: CustomScrollView(
         slivers: [
           // ── SliverAppBar con hero ────────────────────────────
@@ -384,14 +396,14 @@ class _EditProfileScreenState extends State<EditProfileScreen>
             expandedHeight: 220,
             pinned: true,
             stretch: true,
-            backgroundColor: Colors.white,
+            backgroundColor: isDark ? const Color(0xFF0A0D14) : Colors.white,
             surfaceTintColor: Colors.transparent,
             elevation: 0,
             leading: IconButton(
               icon: Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.9),
+                  color: isDark ? const Color(0xFF161920).withValues(alpha: 0.9) : Colors.white.withValues(alpha: 0.9),
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
@@ -400,8 +412,8 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                     )
                   ],
                 ),
-                child: const Icon(Icons.arrow_back_ios_rounded,
-                    color: Color(0xFF041249), size: 16),
+                child: Icon(Icons.arrow_back_ios_rounded,
+                    color: isDark ? Colors.white : const Color(0xFF041249), size: 16),
               ),
               onPressed: () => Navigator.of(context).pop(),
             ),
@@ -415,7 +427,11 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                       gradient: LinearGradient(
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
-                        colors: [Color(0xFF041249), Color(0xFF1A4A9C)],
+                        colors: [
+                          Color(0xFFFFA000), // Naranja ámbar brillante
+                          Color(0xFFFD7C36), // Naranja corporativo insignia
+                          Color(0xFFFF3D00), // Naranja profundo / coral vibrante
+                        ],
                       ),
                     ),
                   ),
@@ -428,8 +444,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                       height: 150,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color:
-                            AppColors.primaryOrange.withValues(alpha: 0.12),
+                        color: Colors.white.withValues(alpha: 0.12),
                       ),
                     ),
                   ),
@@ -474,24 +489,24 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                             _nameCtrl.text.isNotEmpty
                                 ? _nameCtrl.text
                                 : 'Tu perfil',
-                            style: const TextStyle(
+                            style: GoogleFonts.outfit(
                               fontSize: 22,
                               fontWeight: FontWeight.bold,
-                              color: Color(0xFF041249),
+                              color: isDark ? Colors.white : const Color(0xFF041249),
                             ),
                           ),
-                          const SizedBox(height: 4),
+                          const SizedBox(height: 6),
                           Container(
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 12, vertical: 4),
                             decoration: BoxDecoration(
                               color: AppColors.primaryOrange
-                                  .withValues(alpha: 0.1),
+                                  .withValues(alpha: 0.08),
                               borderRadius: BorderRadius.circular(20),
                             ),
                             child: Text(
                               '${_interests.length} intereses · ${_calcAge(_birthDate) != null ? "${_calcAge(_birthDate)} años" : "Edad no definida"}',
-                              style: const TextStyle(
+                              style: GoogleFonts.outfit(
                                 fontSize: 12,
                                 color: AppColors.primaryOrange,
                                 fontWeight: FontWeight.w600,
@@ -562,13 +577,13 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                                     )
                                   : null,
                               color: _birthDate == null
-                                  ? const Color(0xFFF8F9FC)
+                                  ? (isDark ? const Color(0xFF1E222B) : const Color(0xFFF8F9FC))
                                   : null,
                               borderRadius: BorderRadius.circular(16),
                               border: Border.all(
                                 color: _birthDate != null
                                     ? AppColors.primaryOrange
-                                    : const Color(0xFFE5E8F0),
+                                    : (isDark ? Colors.white.withValues(alpha: 0.08) : const Color(0xFFE5E8F0)),
                                 width: _birthDate != null ? 1.5 : 1,
                               ),
                             ),
@@ -596,8 +611,9 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                                         'Fecha de nacimiento',
                                         style: TextStyle(
                                           fontSize: 11,
-                                          color: const Color(0xFF041249)
-                                              .withValues(alpha: 0.45),
+                                          color: isDark
+                                              ? Colors.white54
+                                              : const Color(0xFF041249).withValues(alpha: 0.45),
                                           fontWeight: FontWeight.w500,
                                           letterSpacing: 0.3,
                                         ),
@@ -616,9 +632,8 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                                               ? FontWeight.w700
                                               : FontWeight.w400,
                                           color: _birthDate != null
-                                              ? const Color(0xFF041249)
-                                              : const Color(0xFF041249)
-                                                  .withValues(alpha: 0.4),
+                                              ? (isDark ? Colors.white : const Color(0xFF041249))
+                                              : (isDark ? Colors.white30 : const Color(0xFF041249).withValues(alpha: 0.4)),
                                         ),
                                       ),
                                     ],
@@ -644,8 +659,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                                 const SizedBox(width: 8),
                                 Icon(
                                   Icons.chevron_right_rounded,
-                                  color: const Color(0xFF041249)
-                                      .withValues(alpha: 0.3),
+                                  color: isDark ? Colors.white30 : const Color(0xFF041249).withValues(alpha: 0.3),
                                 ),
                               ],
                             ),
@@ -754,11 +768,13 @@ class _SectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? const Color(0xFF161920) : Colors.white,
         borderRadius: BorderRadius.circular(24),
-        boxShadow: [
+        border: isDark ? Border.all(color: Colors.white.withValues(alpha: 0.08), width: 1) : null,
+        boxShadow: isDark ? [] : [
           BoxShadow(
             color: color.withValues(alpha: 0.06),
             blurRadius: 20,
@@ -814,7 +830,7 @@ class _SectionCard extends StatelessWidget {
                           subtitle!,
                           style: TextStyle(
                             fontSize: 11,
-                            color: const Color(0xFF041249).withValues(alpha: 0.4),
+                            color: isDark ? Colors.white54 : const Color(0xFF041249).withValues(alpha: 0.4),
                           ),
                         ),
                     ],
@@ -862,6 +878,7 @@ class _PremiumField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return TextFormField(
       controller: controller,
       validator: validator,
@@ -869,10 +886,10 @@ class _PremiumField extends StatelessWidget {
       maxLines: maxLines,
       maxLength: maxLength,
       onChanged: onChanged,
-      style: const TextStyle(
+      style: TextStyle(
           fontSize: 15,
           fontWeight: FontWeight.w500,
-          color: Color(0xFF041249)),
+          color: isDark ? Colors.white : const Color(0xFF041249)),
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
@@ -886,16 +903,16 @@ class _PremiumField extends StatelessWidget {
           child: Icon(icon, color: AppColors.primaryOrange, size: 16),
         ),
         filled: true,
-        fillColor: const Color(0xFFF8F9FC),
+        fillColor: isDark ? const Color(0xFF1E222B) : const Color(0xFFF8F9FC),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
           borderSide: BorderSide(
-              color: const Color(0xFF041249).withValues(alpha: 0.08)),
+              color: isDark ? Colors.white.withValues(alpha: 0.08) : const Color(0xFF041249).withValues(alpha: 0.08)),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
           borderSide: BorderSide(
-              color: const Color(0xFF041249).withValues(alpha: 0.08)),
+              color: isDark ? Colors.white.withValues(alpha: 0.08) : const Color(0xFF041249).withValues(alpha: 0.08)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
@@ -907,15 +924,15 @@ class _PremiumField extends StatelessWidget {
           borderSide: const BorderSide(color: Colors.red, width: 1.5),
         ),
         labelStyle: TextStyle(
-            color: const Color(0xFF041249).withValues(alpha: 0.5),
+            color: isDark ? Colors.white54 : const Color(0xFF041249).withValues(alpha: 0.5),
             fontSize: 13),
         hintStyle: TextStyle(
-            color: const Color(0xFF041249).withValues(alpha: 0.3),
+            color: isDark ? Colors.white30 : const Color(0xFF041249).withValues(alpha: 0.3),
             fontSize: 14),
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         counterStyle: TextStyle(
-            color: const Color(0xFF041249).withValues(alpha: 0.35),
+            color: isDark ? Colors.white38 : const Color(0xFF041249).withValues(alpha: 0.35),
             fontSize: 11),
       ),
     );
@@ -931,6 +948,7 @@ class _PremiumGenderSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final options = [
       (UserGender.male, Icons.male_rounded, 'Masculino',
           const Color(0xFF1565C0)),
@@ -962,10 +980,10 @@ class _PremiumGenderSelector extends StatelessWidget {
                       ],
                     )
                   : null,
-              color: isSel ? null : const Color(0xFFF8F9FC),
+              color: isSel ? null : (isDark ? const Color(0xFF1E222B) : const Color(0xFFF8F9FC)),
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: isSel ? color : const Color(0xFFE5E8F0),
+                color: isSel ? color : (isDark ? Colors.white.withValues(alpha: 0.08) : const Color(0xFFE5E8F0)),
                 width: isSel ? 2 : 1,
               ),
             ),
@@ -978,14 +996,14 @@ class _PremiumGenderSelector extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: isSel
                         ? color.withValues(alpha: 0.15)
-                        : const Color(0xFF041249).withValues(alpha: 0.05),
+                        : (isDark ? Colors.white.withValues(alpha: 0.05) : const Color(0xFF041249).withValues(alpha: 0.05)),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(
                     icon,
                     color: isSel
                         ? color
-                        : const Color(0xFF041249).withValues(alpha: 0.35),
+                        : (isDark ? Colors.white54 : const Color(0xFF041249).withValues(alpha: 0.35)),
                     size: 22,
                   ),
                 ),
@@ -997,7 +1015,7 @@ class _PremiumGenderSelector extends StatelessWidget {
                       fontSize: 15,
                       fontWeight:
                           isSel ? FontWeight.w700 : FontWeight.w400,
-                      color: isSel ? color : const Color(0xFF041249),
+                      color: isSel ? color : (isDark ? Colors.white70 : const Color(0xFF041249)),
                     ),
                   ),
                 ),
@@ -1009,7 +1027,7 @@ class _PremiumGenderSelector extends StatelessWidget {
                     color: isSel ? color : Colors.transparent,
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: isSel ? color : const Color(0xFFCFD8DC),
+                      color: isSel ? color : (isDark ? Colors.white24 : const Color(0xFFCFD8DC)),
                       width: 2,
                     ),
                   ),
@@ -1036,6 +1054,7 @@ class _PremiumInterestGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Wrap(
       spacing: 8,
       runSpacing: 8,
@@ -1051,27 +1070,29 @@ class _PremiumInterestGrid extends StatelessWidget {
             padding:
                 const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: isSel ? color : Colors.white,
+              color: isSel ? color : (isDark ? const Color(0xFF1E222B) : Colors.white),
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
-                color: isSel ? color : color.withValues(alpha: 0.3),
+                color: isSel ? color : color.withValues(alpha: isDark ? 0.25 : 0.3),
                 width: isSel ? 0 : 1.5,
               ),
-              boxShadow: isSel
-                  ? [
-                      BoxShadow(
-                        color: color.withValues(alpha: 0.35),
-                        blurRadius: 8,
-                        offset: const Offset(0, 4),
-                      )
-                    ]
-                  : [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.04),
-                        blurRadius: 6,
-                        offset: const Offset(0, 2),
-                      )
-                    ],
+              boxShadow: isDark
+                  ? []
+                  : (isSel
+                      ? [
+                          BoxShadow(
+                            color: color.withValues(alpha: 0.35),
+                            blurRadius: 8,
+                            offset: const Offset(0, 4),
+                          )
+                        ]
+                      : [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.04),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
+                          )
+                        ]),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,

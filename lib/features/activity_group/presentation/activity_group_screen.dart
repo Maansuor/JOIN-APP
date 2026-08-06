@@ -6,11 +6,13 @@ import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:join_app/core/providers/app_state.dart';
 import 'package:join_app/core/data/mock_data.dart';
-import 'package:join_app/core/services/api_client.dart';
+import 'package:join_app/core/repositories/supabase_chat_repository.dart';
 import 'package:join_app/core/services/encryption_service.dart';
 import 'package:join_app/core/models/chat_message_model.dart';
 import 'package:join_app/core/models/contribution_model.dart';
 import 'package:join_app/core/models/activity_model.dart';
+import 'package:join_app/features/activity/presentation/widgets/iguana_checklist.dart';
+import 'package:join_app/features/activity_group/presentation/widgets/icebreaker_sheet.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -29,6 +31,7 @@ class _ActivityGroupScreenState extends State<ActivityGroupScreen> with SingleTi
   late List<ChatMessage> messages;
   late List<Contribution> contributions;
   final TextEditingController _messageController = TextEditingController();
+  final SupabaseChatRepository _chatRepo = SupabaseChatRepository();
 
   bool _isLoadingChat = true;
 
@@ -44,25 +47,9 @@ class _ActivityGroupScreenState extends State<ActivityGroupScreen> with SingleTi
 
   Future<void> _loadContributions() async {
     try {
-      final response = await ApiClient.instance.get('/contributions.php?action=list&activityId=${widget.activityId}');
-      final List<dynamic> json = response['contributions'] ?? [];
-      
+      final fetched = await _chatRepo.getContributions(widget.activityId);
       if (mounted) {
-        setState(() {
-          contributions = json.map((data) => Contribution(
-            id: data['id'],
-            activityId: data['activityId'],
-            title: data['title'],
-            description: data['description'] ?? '',
-            category: data['category'] ?? 'other',
-            isRequired: data['isRequired'] ?? false,
-            assignedToUserId: data['assignedToUserId'],
-            assignedToUserName: data['assignedToUserName'],
-            assignedToUserImage: data['assignedToUserImage'],
-            createdAt: DateTime.parse(data['createdAt']),
-            createdByUserId: data['createdByUserId']
-          )).toList();
-        });
+        setState(() => contributions = fetched);
       }
     } catch (e) {
       debugPrint('Error cargando aportes: $e');
@@ -71,13 +58,10 @@ class _ActivityGroupScreenState extends State<ActivityGroupScreen> with SingleTi
 
   Future<void> _loadChatMessages() async {
     try {
-      final response = await ApiClient.instance.get('/chat.php?action=list&activityId=${widget.activityId}');
-      // Marcar como leído
-      ApiClient.instance.post('/chat.php?action=mark_read', {'activityId': widget.activityId}).catchError((_) => null);
+      final msgs = await _chatRepo.getMessages(widget.activityId);
+      // Marcar como leído (en segundo plano)
+      _chatRepo.markRead(widget.activityId);
 
-      final List<dynamic> msgsJson = response['messages'] ?? [];
-      final msgs = msgsJson.map((json) => ChatMessage.fromJson(json)).toList();
-      
       if (mounted) {
         setState(() {
           messages = msgs;
@@ -94,31 +78,31 @@ class _ActivityGroupScreenState extends State<ActivityGroupScreen> with SingleTi
   Future<void> _sendMessage({File? image}) async {
     final text = _messageController.text.trim();
     if (text.isEmpty && image == null) return;
-    
+
     _messageController.clear();
-    
+
     try {
       final encryptedText = EncryptionService.encryptText(text);
-      final response = await ApiClient.instance.postMultipart(
-        '/chat.php?action=send',
-        {'activityId': widget.activityId, 'message': encryptedText},
-        file: image,
+      final sent = await _chatRepo.sendMessage(
+        activityId: widget.activityId,
+        message: encryptedText,
+        image: image,
       );
-      
+
       // Añadir de forma optimista mientras recargamos todo
       setState(() {
         messages.insert(0, ChatMessage(
-          id: response['id'],
+          id: sent.id,
           userId: context.read<AppState>().currentUser?.id ?? 'me',
           userName: context.read<AppState>().currentUser?.name ?? 'Tú',
           userImageUrl: context.read<AppState>().currentUser?.profileImageUrl ?? '',
           message: text,
           timestamp: DateTime.now(),
           type: image != null ? MessageType.image : MessageType.text,
-          imageUrls: response['imageUrl'] != null ? [response['imageUrl']] : null,
+          imageUrls: sent.imageUrl != null ? [sent.imageUrl!] : null,
         ));
       });
-      
+
       _loadChatMessages(); // Recargar orden oficial
     } catch (e) {
       if (mounted) {
@@ -127,19 +111,61 @@ class _ActivityGroupScreenState extends State<ActivityGroupScreen> with SingleTi
     }
   }
 
-  Future<void> _pickImage() async {
+  Future<void> _pickImage(ImageSource source) async {
     final ImagePicker picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
+    final XFile? image = await picker.pickImage(source: source, imageQuality: 70);
     if (image != null) {
       await _sendMessage(image: File(image.path));
     }
   }
 
+  void _showAttachmentOptions() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: const Color(0xFFFD7C36).withValues(alpha: 0.1),
+                  child: const Icon(Icons.photo_camera_rounded, color: Color(0xFFFD7C36)),
+                ),
+                title: const Text('Cámara'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _pickImage(ImageSource.camera);
+                },
+              ),
+              ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: const Color(0xFFFD7C36).withValues(alpha: 0.1),
+                  child: const Icon(Icons.photo_library_rounded, color: Color(0xFFFD7C36)),
+                ),
+                title: const Text('Galería'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _pickImage(ImageSource.gallery);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _deleteMessage(ChatMessage message) async {
     try {
-      await ApiClient.instance.post('/chat.php?action=delete', {
-        'messageId': message.id,
-      });
+      await _chatRepo.deleteMessage(message.id);
       setState(() => messages.removeWhere((m) => m.id == message.id));
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Mensaje eliminado')));
     } catch (e) {
@@ -150,10 +176,7 @@ class _ActivityGroupScreenState extends State<ActivityGroupScreen> with SingleTi
   Future<void> _editMessage(ChatMessage message, String newText) async {
     try {
       final encryptedText = EncryptionService.encryptText(newText);
-      await ApiClient.instance.post('/chat.php?action=edit', {
-        'messageId': message.id,
-        'message': encryptedText,
-      });
+      await _chatRepo.editMessage(message.id, encryptedText);
       setState(() {
         final index = messages.indexWhere((m) => m.id == message.id);
         if (index != -1) {
@@ -169,21 +192,18 @@ class _ActivityGroupScreenState extends State<ActivityGroupScreen> with SingleTi
   Future<void> _reactToMessage(ChatMessage message, String reaction) async {
     final currentUserId = context.read<AppState>().currentUser?.id ?? 'me';
     try {
-      final response = await ApiClient.instance.post('/chat.php?action=react', {
-        'messageId': message.id,
-        'reaction': reaction,
-      });
-      
+      final action = await _chatRepo.toggleReaction(message.id, reaction);
+
       setState(() {
         final index = messages.indexWhere((m) => m.id == message.id);
         if (index != -1) {
           final msg = messages[index];
           final reactions = List<MessageReaction>.from(msg.reactions);
           final existingIndex = reactions.indexWhere((r) => r.userId == currentUserId && r.reaction == reaction);
-          
-          if (response['action'] == 'removed') {
+
+          if (action == 'removed') {
              if (existingIndex != -1) reactions.removeAt(existingIndex);
-          } else if (response['action'] == 'added' || response['action'] == 'updated') {
+          } else if (action == 'added' || action == 'updated') {
              if (existingIndex == -1) {
                 reactions.removeWhere((r) => r.userId == currentUserId);
                 reactions.add(MessageReaction(userId: currentUserId, reaction: reaction));
@@ -362,18 +382,22 @@ class _ActivityGroupScreenState extends State<ActivityGroupScreen> with SingleTi
 
     return Scaffold(
       appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              activity.title,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            Text(
-              '${activity.currentParticipants} participantes',
-              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-            ),
-          ],
+        title: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () => context.push('/main/activity/${widget.activityId}'),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                activity.title,
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              Text(
+                '${activity.currentParticipants} participantes',
+                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              ),
+            ],
+          ),
         ),
         elevation: 0,
         backgroundColor: Colors.transparent,
@@ -381,64 +405,108 @@ class _ActivityGroupScreenState extends State<ActivityGroupScreen> with SingleTi
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.pop(),
         ),
+        actions: [
+          // Juegos rompehielo — "¿Listos para animar la reu?"
+          Padding(
+            padding: const EdgeInsets.only(right: 14),
+            child: GestureDetector(
+              onTap: () => showIcebreakerSheet(context),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFFD7C36), Color(0xFFFF2D55)],
+                  ),
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFFF2D55).withValues(alpha: 0.3),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.casino_rounded, color: Colors.white, size: 15),
+                    SizedBox(width: 5),
+                    Text(
+                      'Juegos',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
       body: Column(
         children: [
           // Premium Tabs
           Container(
-            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
             decoration: BoxDecoration(
               color: Colors.grey[100],
-              borderRadius: BorderRadius.circular(28),
+              borderRadius: BorderRadius.circular(20),
             ),
-            padding: const EdgeInsets.all(4),
-            child: TabBar(
-              controller: _tabController,
-              labelColor: Colors.white,
-              unselectedLabelColor: Colors.grey[600],
-              indicatorSize: TabBarIndicatorSize.tab,
-              dividerColor: Colors.transparent,
-              indicator: BoxDecoration(
-                gradient: const LinearGradient(colors: [Color(0xFFFD7C36), Color(0xFFF95B00)], begin: Alignment.topLeft, end: Alignment.bottomRight),
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: [
-                  BoxShadow(color: const Color(0xFFFD7C36).withValues(alpha: 0.3), blurRadius: 6, spreadRadius: 0, offset: const Offset(0, 2))
-                ]
-              ),
-              tabs: const [
-                Tab(
-                  child: Row(
-                     mainAxisAlignment: MainAxisAlignment.center,
-                     children: [
-                       Icon(Icons.chat_bubble_rounded, size: 16),
-                       SizedBox(width: 6),
-                       Text('Chat', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+            child: SizedBox(
+              height: 36,
+              child: TabBar(
+                controller: _tabController,
+                labelColor: Colors.white,
+                unselectedLabelColor: Colors.grey[600],
+                indicatorSize: TabBarIndicatorSize.tab,
+                dividerColor: Colors.transparent,
+                indicator: BoxDecoration(
+                  gradient: const LinearGradient(colors: [Color(0xFFFD7C36), Color(0xFFF95B00)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(color: const Color(0xFFFD7C36).withValues(alpha: 0.3), blurRadius: 4, spreadRadius: 0, offset: const Offset(0, 1.5))
+                  ]
+                ),
+                tabs: const [
+                  Tab(
+                    child: Row(
+                       mainAxisAlignment: MainAxisAlignment.center,
+                       children: [
+                       Icon(Icons.chat_bubble_rounded, size: 14),
+                       SizedBox(width: 4),
+                       Text('Chat', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
                      ],
                   ),
                 ),
                 Tab(
+                  height: 36,
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.inventory_2_rounded, size: 16),
-                      SizedBox(width: 6),
-                      Text('Aportes', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                      Icon(Icons.inventory_2_rounded, size: 14),
+                      SizedBox(width: 4),
+                      Text('Aportes', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
                     ],
                   ),
                 ),
                 Tab(
+                  height: 36,
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.map_rounded, size: 16),
-                      SizedBox(width: 6),
-                      Text('Ubic.', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                      Icon(Icons.map_rounded, size: 14),
+                      SizedBox(width: 4),
+                      Text('Ubic.', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
                     ],
                   ),
                 ),
               ],
             ),
-          ).animate().slideY(begin: -0.2, duration: 400.ms).fadeIn(),
+          ),
+        ).animate().slideY(begin: -0.2, duration: 400.ms).fadeIn(),
           // Tab Views
           Expanded(
             child: TabBarView(
@@ -447,7 +515,7 @@ class _ActivityGroupScreenState extends State<ActivityGroupScreen> with SingleTi
                 // Chat Tab
                 _buildChatTab(),
                 // Contributions Tab
-                _buildContributionsTab(),
+                _buildContributionsTab(activity),
                 // Location Tab
                 _buildLocationTab(activity),
               ],
@@ -464,44 +532,6 @@ class _ActivityGroupScreenState extends State<ActivityGroupScreen> with SingleTi
 
     return Column(
       children: [
-        // Banner E2EE Estilo Premium
-        Container(
-          margin: const EdgeInsets.only(top: 16, bottom: 8),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          decoration: BoxDecoration(
-            color: const Color(0xFFFEF3C7),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: const Color(0xFFFDE68A)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.amber.withValues(alpha: 0.1),
-                blurRadius: 10,
-                offset: const Offset(0, 4)
-              ),
-            ]
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(4),
-                decoration: const BoxDecoration(color: Color(0xFFF59E0B), shape: BoxShape.circle),
-                child: const Icon(Icons.lock_rounded, size: 10, color: Colors.white),
-              ),
-              const SizedBox(width: 8),
-              const Text(
-                'Mensajes cifrados de extremo a extremo',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: Color(0xFFB45309),
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 0.3
-                ),
-              ),
-            ],
-          ),
-        ).animate().slideY(begin: -0.5, duration: 400.ms, curve: Curves.easeOut).fadeIn(delay: 200.ms),
-        
         // Mensajes fijados (si los hay)
         if (pinnedMessages.isNotEmpty) ...[
           Container(
@@ -540,8 +570,48 @@ class _ActivityGroupScreenState extends State<ActivityGroupScreen> with SingleTi
               : ListView.builder(
               reverse: true,
               padding: const EdgeInsets.all(16),
-              itemCount: messages.length,
+              itemCount: messages.length + 1,
               itemBuilder: (context, index) {
+                if (index == messages.length) {
+                  return Center(
+                    child: Container(
+                      margin: const EdgeInsets.only(top: 16, bottom: 16),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFEF3C7),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: const Color(0xFFFDE68A)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.amber.withValues(alpha: 0.1),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4)
+                          ),
+                        ]
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: const BoxDecoration(color: Color(0xFFF59E0B), shape: BoxShape.circle),
+                            child: const Icon(Icons.lock_rounded, size: 10, color: Colors.white),
+                          ),
+                          const SizedBox(width: 8),
+                          const Text(
+                            'Mensajes cifrados de extremo a extremo',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Color(0xFFB45309),
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 0.3
+                            ),
+                          ),
+                        ],
+                      ),
+                    ).animate().slideY(begin: -0.5, duration: 400.ms, curve: Curves.easeOut).fadeIn(delay: 200.ms),
+                  );
+                }
                 final message = messages[index]; // ListView.builder(reverse: true) ya los lee desde abajo
                 return GestureDetector(
                   onLongPress: () => _showMessageOptions(message),
@@ -553,7 +623,7 @@ class _ActivityGroupScreenState extends State<ActivityGroupScreen> with SingleTi
         ),
         // Premium Input Box
         Container(
-          padding: const EdgeInsets.only(left: 12, right: 12, top: 12, bottom: 24),
+          padding: const EdgeInsets.only(left: 12, right: 12, top: 12, bottom: 8),
           decoration: BoxDecoration(
             color: Colors.white,
             boxShadow: [
@@ -576,8 +646,8 @@ class _ActivityGroupScreenState extends State<ActivityGroupScreen> with SingleTi
                     shape: BoxShape.circle,
                   ),
                   child: IconButton(
-                    icon: const Icon(Icons.add_photo_alternate_rounded, color: Color(0xFFFD7C36), size: 22),
-                    onPressed: _pickImage,
+                    icon: const Icon(Icons.add_rounded, color: Color(0xFFFD7C36), size: 24),
+                    onPressed: _showAttachmentOptions,
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -597,6 +667,10 @@ class _ActivityGroupScreenState extends State<ActivityGroupScreen> with SingleTi
                           hintText: 'Escribe algo increíble...',
                           hintStyle: TextStyle(color: Colors.grey, fontSize: 14),
                           border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          disabledBorder: InputBorder.none,
+                          filled: false,
                           contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                         ),
                         maxLines: null,
@@ -629,7 +703,7 @@ class _ActivityGroupScreenState extends State<ActivityGroupScreen> with SingleTi
   }
 
   /// Tab de Aportes
-  Widget _buildContributionsTab() {
+  Widget _buildContributionsTab(Activity activity) {
     final coveredContributions = contributions.where((c) => c.isCovered).toList();
     final uncoveredContributions = contributions.where((c) => !c.isCovered).toList();
 
@@ -638,6 +712,9 @@ class _ActivityGroupScreenState extends State<ActivityGroupScreen> with SingleTi
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Checklist interactivo de la iguana — "¿llevas todo?"
+          IguanaChecklist(activity: activity),
+
           // Progreso general
           _buildProgressSection(coveredContributions, contributions),
           const SizedBox(height: 24),
@@ -708,9 +785,311 @@ class _ActivityGroupScreenState extends State<ActivityGroupScreen> with SingleTi
               label: const Text('Sugerir Aporte'),
             ),
           ),
+
+          const Divider(height: 48, thickness: 1),
+
+          // Banco de Ideas y Sugerencias
+          _buildSuggestionsSection(activity),
         ],
       ),
     );
+  }
+
+  /// Banco de Ideas y Sugerencias Section
+  Widget _buildSuggestionsSection(Activity activity) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final suggestions = activity.suggestions;
+    final currentUserId = context.read<AppState>().currentUser?.id;
+    final isOrganizer = activity.organizerId == currentUserId;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF2D2A10) : const Color(0xFFFFF8E1),
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: isDark ? Colors.amber.withValues(alpha: 0.2) : Colors.amber[200]!,
+                  width: 1.5,
+                ),
+              ),
+              child: const Icon(Icons.lightbulb_outline_rounded, color: Colors.amber, size: 20),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Banco de Ideas y Sugerencias',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 15,
+                      letterSpacing: -0.3,
+                      color: isDark ? Colors.white : Colors.black87,
+                    ),
+                  ),
+                  Text(
+                    'Ideas propuestas por el organizador para esta actividad',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: isDark ? Colors.white54 : Colors.grey[600],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        if (suggestions.isEmpty)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF2D2A10).withValues(alpha: 0.1) : Colors.amber.withValues(alpha: 0.03),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: isDark ? Colors.amber.withValues(alpha: 0.1) : Colors.amber.withValues(alpha: 0.15),
+                width: 1,
+              ),
+            ),
+            child: Column(
+              children: [
+                Icon(Icons.lightbulb_rounded, size: 32, color: Colors.amber.withValues(alpha: 0.5)),
+                const SizedBox(height: 8),
+                Text(
+                  'No hay sugerencias aún',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.white70 : Colors.black87,
+                  ),
+                ),
+                if (isOrganizer) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    'Como organizador, puedes proponer ideas para el grupo.',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: isDark ? Colors.white54 : Colors.grey[600],
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ],
+            ),
+          )
+        else
+          Column(
+            children: suggestions.asMap().entries.map((entry) {
+              final index = entry.key;
+              final suggestion = entry.value;
+              return Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF161920) : Colors.white,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.grey.withValues(alpha: 0.15),
+                    width: 1.5,
+                  ),
+                  boxShadow: isDark ? [] : [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.02),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.withValues(alpha: 0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Text('💡', style: TextStyle(fontSize: 14)),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        suggestion,
+                        style: TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w500,
+                          color: isDark ? Colors.white : Colors.black87,
+                        ),
+                      ),
+                    ),
+                    if (isOrganizer)
+                      IconButton(
+                        icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 18),
+                        onPressed: () => _removeSuggestion(activity, suggestion),
+                        tooltip: 'Eliminar sugerencia',
+                      ),
+                  ],
+                ),
+              ).animate().fadeIn(duration: 300.ms, delay: (index * 50).ms);
+            }).toList(),
+          ),
+        if (isOrganizer) ...[
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: TextButton.icon(
+              onPressed: () => _showAddSuggestionDialog(activity),
+              icon: const Icon(Icons.add_circle_outline_rounded, color: Colors.amber, size: 18),
+              label: const Text(
+                'Proponer Idea / Sugerencia',
+                style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 13.5),
+              ),
+              style: TextButton.styleFrom(
+                backgroundColor: Colors.amber.withValues(alpha: 0.08),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  side: BorderSide(color: Colors.amber.withValues(alpha: 0.2)),
+                ),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  void _showAddSuggestionDialog(Activity activity) {
+    final controller = TextEditingController();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: isDark ? const Color(0xFF161920) : Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: Row(
+            children: [
+              const Text('💡 '),
+              Text(
+                'Proponer Sugerencia',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                  color: isDark ? Colors.white : Colors.black87,
+                ),
+              ),
+            ],
+          ),
+          content: TextField(
+            controller: controller,
+            maxLines: 3,
+            decoration: InputDecoration(
+              hintText: 'Ej: Llevar protector solar o ropa cómoda...',
+              hintStyle: TextStyle(color: isDark ? Colors.white30 : Colors.grey[400]),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: BorderSide(color: isDark ? Colors.white24 : Colors.grey[300]!),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: const BorderSide(color: Colors.amber, width: 2),
+              ),
+              filled: true,
+              fillColor: isDark ? const Color(0xFF1E222B) : Colors.grey[50],
+            ),
+            style: TextStyle(color: isDark ? Colors.white : Colors.black87),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(
+                'Cancelar',
+                style: TextStyle(color: isDark ? Colors.white54 : Colors.grey[600]),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final text = controller.text.trim();
+                if (text.isNotEmpty) {
+                  Navigator.pop(context);
+                  await _addSuggestion(activity, text);
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.amber,
+                foregroundColor: Colors.black,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+              child: const Text('Proponer', style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _addSuggestion(Activity activity, String suggestion) async {
+    try {
+      final updatedSuggestions = [...activity.suggestions, suggestion];
+      final updatedActivity = activity.copyWith(suggestions: updatedSuggestions);
+
+      await context.read<AppState>().updateActivity(updatedActivity);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Sugerencia añadida correctamente'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error al añadir sugerencia: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al añadir sugerencia: $e'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _removeSuggestion(Activity activity, String suggestion) async {
+    try {
+      final updatedSuggestions = activity.suggestions.where((s) => s != suggestion).toList();
+      final updatedActivity = activity.copyWith(suggestions: updatedSuggestions);
+
+      await context.read<AppState>().updateActivity(updatedActivity);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Sugerencia eliminada correctamente'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error al eliminar sugerencia: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al eliminar sugerencia: $e'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    }
   }
 
   /// Tab de Ubicación
@@ -885,8 +1264,7 @@ class _ActivityGroupScreenState extends State<ActivityGroupScreen> with SingleTi
     if (currentUserId == null) return;
 
     final isMine = contribution.assignedToUserId == currentUserId;
-    final url = isMine ? '/contributions.php?action=unassign' : '/contributions.php?action=assign';
-    
+
     // Optimista
     final index = contributions.indexWhere((c) => c.id == contribution.id);
     if (index == -1) return;
@@ -905,9 +1283,11 @@ class _ActivityGroupScreenState extends State<ActivityGroupScreen> with SingleTi
     });
 
     try {
-      await ApiClient.instance.post(url, {
-        'contributionId': contribution.id
-      });
+      if (isMine) {
+        await _chatRepo.unassignContribution(contribution.id);
+      } else {
+        await _chatRepo.assignContribution(contribution.id);
+      }
       // Volvemos a cargarlos para sincronizar
       _loadContributions();
     } catch (e) {
@@ -1016,12 +1396,12 @@ class _ActivityGroupScreenState extends State<ActivityGroupScreen> with SingleTi
                 onPressed: () async {
                   if (titleController.text.isNotEmpty) {
                     try {
-                      await ApiClient.instance.post('/contributions.php?action=create', {
-                        'activityId': widget.activityId,
-                        'title': titleController.text,
-                        'description': descriptionController.text,
-                        'category': selectedCategory,
-                      });
+                      await _chatRepo.createContribution(
+                        activityId: widget.activityId,
+                        title: titleController.text,
+                        description: descriptionController.text,
+                        category: selectedCategory,
+                      );
 
                       if (context.mounted) {
                         context.pop();

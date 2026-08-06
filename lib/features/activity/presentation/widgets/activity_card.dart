@@ -27,8 +27,10 @@ class ActivityCard extends StatefulWidget {
 class _ActivityCardState extends State<ActivityCard> {
   bool _pressed = false;
 
+  String get _primaryCategory => widget.activity.category.split(',').first.trim();
+
   Color get _categoryColor {
-    switch (widget.activity.category) {
+    switch (_primaryCategory) {
       case 'Deportes':
         return const Color(0xFFE53935);
       case 'Comida':
@@ -45,7 +47,7 @@ class _ActivityCardState extends State<ActivityCard> {
   }
 
   IconData get _categoryIcon {
-    switch (widget.activity.category) {
+    switch (_primaryCategory) {
       case 'Deportes':
         return Icons.sports_baseball_rounded;
       case 'Comida':
@@ -97,7 +99,7 @@ class _ActivityCardState extends State<ActivityCard> {
         transform: Matrix4.identity()..scale(_pressed ? 0.98 : 1.0),
         transformAlignment: Alignment.center,
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: Theme.of(context).cardTheme.color ?? Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(24),
           boxShadow: _pressed
               ? []
@@ -109,7 +111,9 @@ class _ActivityCardState extends State<ActivityCard> {
                     offset: const Offset(0, 6),
                   ),
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.06),
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.black.withValues(alpha: 0.25)
+                        : Colors.black.withValues(alpha: 0.06),
                     blurRadius: 10,
                     offset: const Offset(0, 2),
                   ),
@@ -176,40 +180,58 @@ class _ActivityCardState extends State<ActivityCard> {
         ),
 
         // ── Badges superiores ────────────────────────────
+        // ── Badges superiores responsivos ────────────────────────────
         Positioned(
           top: 14,
           left: 14,
-          child: Row(
-            children: [
-              // Categoría
-              _Badge(
-                icon: _categoryIcon,
-                label: widget.activity.category,
-                color: _categoryColor,
-                style: _BadgeStyle.filled,
-              ),
-              if (widget.isOrganizer) ...[
-                const SizedBox(width: 8),
-                const _Badge(
-                  icon: Icons.verified_rounded,
-                  label: 'Organizador',
-                  color: AppColors.skyBlue,
-                  style: _BadgeStyle.filled,
-                ),
-              ],
-            ],
-          ),
-        ),
-
-        // Cupos (arriba derecha)
-        Positioned(
-          top: 14,
           right: 14,
-          child: _Badge(
-            icon: isFull ? Icons.block_rounded : Icons.people_alt_rounded,
-            label: isFull ? 'Lleno' : '$slotsLeft cupos',
-            color: isFull ? Colors.red.shade700 : Colors.green.shade600,
-            style: _BadgeStyle.glass,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    // Categoría
+                    _Badge(
+                      icon: _categoryIcon,
+                      label: widget.activity.category.split(',').first.trim() +
+                          (widget.activity.category.split(',').length > 1
+                              ? ' +${widget.activity.category.split(',').length - 1}'
+                              : ''),
+                      color: _categoryColor,
+                      style: _BadgeStyle.filled,
+                    ),
+                    if (widget.activity.city != null && widget.activity.city!.isNotEmpty)
+                      _Badge(
+                        icon: Icons.location_on_rounded,
+                        label: widget.activity.city!,
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? const Color(0xFF1E222B)
+                            : AppColors.navyBlue,
+                        style: _BadgeStyle.filled,
+                      ),
+                    if (widget.isOrganizer)
+                      const _Badge(
+                        icon: Icons.verified_rounded,
+                        label: 'Organizador',
+                        color: AppColors.skyBlue,
+                        style: _BadgeStyle.filled,
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Cupos (arriba derecha)
+              _Badge(
+                icon: isFull ? Icons.block_rounded : Icons.people_alt_rounded,
+                label: isFull ? 'Lleno' : '$slotsLeft cupos',
+                color: isFull ? Colors.red.shade700 : Colors.green.shade600,
+                style: _BadgeStyle.glass,
+              ),
+            ],
           ),
         ),
 
@@ -303,7 +325,9 @@ class _ActivityCardState extends State<ActivityCard> {
                       : widget.activity.location,
                   style: TextStyle(
                     fontSize: 13,
-                    color: Colors.grey[600],
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? const Color(0xFF94A3B8)
+                        : Colors.grey[600],
                     fontWeight: FontWeight.w500,
                   ),
                   maxLines: 1,
@@ -404,7 +428,11 @@ class _ActivityCardState extends State<ActivityCard> {
           const SizedBox(height: 12),
 
           // Divisor
-          Divider(color: Colors.grey[100], thickness: 1),
+          Divider(
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? const Color(0xFF2E323F)
+                  : Colors.grey[100],
+              thickness: 1),
 
           const SizedBox(height: 10),
 
@@ -439,10 +467,10 @@ class _ActivityCardState extends State<ActivityCard> {
                       children: [
                         Text(
                           widget.activity.organizerName,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w700,
-                            color: AppColors.navyBlue,
+                            color: Theme.of(context).colorScheme.onSurface,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -474,7 +502,9 @@ class _ActivityCardState extends State<ActivityCard> {
                           '${widget.activity.organizerRating} · ${widget.activity.organizerActivities} eventos',
                           style: TextStyle(
                             fontSize: 11,
-                            color: Colors.grey[500],
+                            color: Theme.of(context).brightness == Brightness.dark
+                                ? const Color(0xFF94A3B8)
+                                : Colors.grey[500],
                             fontWeight: FontWeight.w500,
                           ),
                         ),
@@ -602,24 +632,27 @@ class _InfoChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: const Color(0xFFF5F6FA),
+        color: isDark ? const Color(0xFF1E222B) : const Color(0xFFF5F6FA),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(
+            color: isDark ? const Color(0xFF2E323F) : Colors.grey.shade200),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 13, color: Colors.grey[600]),
+          Icon(icon,
+              size: 13, color: isDark ? const Color(0xFF94A3B8) : Colors.grey[600]),
           const SizedBox(width: 5),
           Text(
             label,
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w600,
-              color: Colors.grey[700],
+              color: isDark ? const Color(0xFFE2E8F0) : Colors.grey[700],
             ),
           ),
         ],

@@ -26,6 +26,13 @@ class Activity {
   final int? durationMinutes;
   final double cost;
   final List<String> contributions;
+  final List<String> suggestions;
+  // Nuevos campos para ubicación dual y ciudad de origen
+  final String? city;
+  final String meetingLocationName;
+  final double? meetingLatitude;
+  final double? meetingLongitude;
+  final bool hasSeparateMeetingPoint;
 
   const Activity({
     required this.id,
@@ -52,6 +59,12 @@ class Activity {
     this.durationMinutes,
     this.cost = 0.0,
     this.contributions = const [],
+    this.suggestions = const [],
+    this.city,
+    this.meetingLocationName = '',
+    this.meetingLatitude,
+    this.meetingLongitude,
+    this.hasSeparateMeetingPoint = false,
   });
 
   /// Calcula los cupos disponibles
@@ -73,46 +86,60 @@ class Activity {
   /// Compatible con el backend PHP (dateTime, locationName, organizerImage)
   /// y con el formato mock anterior (eventDateTime, location, organizerImageUrl)
   factory Activity.fromJson(Map<String, dynamic> json) {
-    // Parsear fecha — backend manda 'dateTime', mock mandaba 'eventDateTime'
-    final rawDate = (json['dateTime'] ?? json['eventDateTime']) as String?;
+    // Parsear fecha — Supabase manda 'event_datetime', backend 'dateTime', mock 'eventDateTime'
+    final rawDate = (json['event_datetime'] ?? json['dateTime'] ?? json['eventDateTime']) as String?;
     final dateTime = rawDate != null
         ? DateTime.tryParse(rawDate) ?? DateTime.now()
         : DateTime.now();
 
     // Nombre del lugar
-    final locName = (json['locationName'] ?? json['location'] ?? '') as String;
+    final locName = (json['location_name'] ?? json['locationName'] ?? json['location'] ?? '') as String;
 
     // Imagen del organizador
-    final orgImage =
-        (json['organizerImage'] ?? json['organizerImageUrl'] ?? '') as String;
+    final orgImage = (json['organizer_image_url'] ?? json['organizer_image'] ?? json['organizerImageUrl'] ?? '') as String;
+
+    // URL de imagen de portada
+    final imgUrl = (json['cover_image_url'] ?? json['imageUrl'] ?? '') as String;
+
+    final city = json['city'] as String?;
+    final meetingLocName = (json['meeting_location_name'] ?? json['meetingLocationName'] ?? locName) as String;
+    final meetingLat = (json['meeting_latitude'] ?? json['meetingLatitude'] as num?)?.toDouble() ?? (json['latitude'] as num?)?.toDouble();
+    final meetingLng = (json['meeting_longitude'] ?? json['meetingLongitude'] as num?)?.toDouble() ?? (json['longitude'] as num?)?.toDouble();
+    final hasSepMeetPoint = (json['has_separate_meeting_point'] ?? json['hasSeparateMeetingPoint'] as bool?) ?? false;
 
     return Activity(
       id: json['id'] as String,
       title: json['title'] as String,
       description: json['description'] as String? ?? '',
       category: json['category'] as String,
-      imageUrl: (json['imageUrl'] ?? '') as String,
+      imageUrl: imgUrl,
       distance: (json['distance'] as num?)?.toDouble() ?? 0.0,
-      ageRange: json['ageRange'] as String? ?? 'Libre',
-      maxParticipants: (json['maxParticipants'] as num?)?.toInt() ?? 1,
+      ageRange: (json['age_range'] ?? json['ageRange'] ?? 'Libre') as String,
+      maxParticipants: (json['max_participants'] ?? json['maxParticipants'] as num?)?.toInt() ?? 1,
       currentParticipants:
-          (json['participantCount'] ?? json['currentParticipants'] as num? ?? 0)
+          (json['current_participants'] ?? json['participantCount'] ?? json['currentParticipants'] as num? ?? 0)
               .toInt(),
-      organizerId: json['organizerId'] as String? ?? '',
-      organizerName: json['organizerName'] as String? ?? '',
+      organizerId: (json['organizer_id'] ?? json['organizerId'] ?? '') as String,
+      organizerName: (json['organizer_name'] ?? json['organizerName'] ?? '') as String,
       organizerImageUrl: orgImage,
-      organizerRating: (json['organizerRating'] as num?)?.toDouble() ?? 0.0,
-      organizerActivities: (json['organizerActivities'] as num?)?.toInt() ?? 0,
+      organizerRating: (json['organizer_rating'] ?? json['organizerRating'] as num?)?.toDouble() ?? 0.0,
+      organizerActivities: (json['organizer_activities'] ?? json['organizerActivities'] as num?)?.toInt() ?? 0,
       eventDateTime: dateTime,
       location: locName,
       locationName: locName,
       latitude: (json['latitude'] as num?)?.toDouble(),
       longitude: (json['longitude'] as num?)?.toDouble(),
       tags: _parseTags(json['tags']),
-      isActive: json['isActive'] as bool? ?? true,
-      durationMinutes: (json['durationMinutes'] as num?)?.toInt(),
+      isActive: (json['is_active'] ?? json['isActive'] as bool?) ?? true,
+      durationMinutes: (json['duration_minutes'] ?? json['durationMinutes'] as num?)?.toInt(),
       cost: (json['cost'] as num?)?.toDouble() ?? 0.0,
       contributions: (json['contributions'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
+      suggestions: (json['suggestions'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
+      city: city,
+      meetingLocationName: meetingLocName,
+      meetingLatitude: meetingLat,
+      meetingLongitude: meetingLng,
+      hasSeparateMeetingPoint: hasSepMeetPoint,
     );
   }
 
@@ -149,6 +176,12 @@ class Activity {
       'durationMinutes': durationMinutes,
       'cost': cost,
       'contributions': contributions,
+      'suggestions': suggestions,
+      'city': city,
+      'meetingLocationName': meetingLocationName,
+      'meetingLatitude': meetingLatitude,
+      'meetingLongitude': meetingLongitude,
+      'hasSeparateMeetingPoint': hasSeparateMeetingPoint,
     };
   }
 
@@ -177,6 +210,12 @@ class Activity {
     int? durationMinutes,
     double? cost,
     List<String>? contributions,
+    List<String>? suggestions,
+    String? city,
+    String? meetingLocationName,
+    double? meetingLatitude,
+    double? meetingLongitude,
+    bool? hasSeparateMeetingPoint,
   }) {
     return Activity(
       id: id ?? this.id,
@@ -203,6 +242,12 @@ class Activity {
       durationMinutes: durationMinutes ?? this.durationMinutes,
       cost: cost ?? this.cost,
       contributions: contributions ?? this.contributions,
+      suggestions: suggestions ?? this.suggestions,
+      city: city ?? this.city,
+      meetingLocationName: meetingLocationName ?? this.meetingLocationName,
+      meetingLatitude: meetingLatitude ?? this.meetingLatitude,
+      meetingLongitude: meetingLongitude ?? this.meetingLongitude,
+      hasSeparateMeetingPoint: hasSeparateMeetingPoint ?? this.hasSeparateMeetingPoint,
     );
   }
 

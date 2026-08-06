@@ -36,6 +36,28 @@ class CategoryConstants {
     'Fiesta',
   ];
 
+  /// Agrupación de subcategorías bajo las 5 categorías principales.
+  /// Una actividad marcada solo con la principal es "general": aparece
+  /// también al filtrar por cualquiera de sus subcategorías (vía
+  /// InterestMapper). Elegir subcategorías la hace más específica.
+  static const Map<String, List<String>> groups = {
+    'Deportes': ['Running', 'Trekking', 'Ciclismo', 'Fútbol', 'Natación', 'Yoga', 'Skate'],
+    'Comida': ['Cocina', 'Gastronomía'],
+    'Naturaleza': ['Camping', 'Playa', 'Viajes', 'Aventura', 'Mascotas'],
+    'Chill': ['Cine', 'Lectura', 'Arte', 'Fotografía', 'Ajedrez'],
+    'Juntas': ['Fiesta', 'Social', 'Música', 'Baile', 'Juegos', 'Gaming'],
+  };
+
+  static List<String> get mainCategories => groups.keys.toList();
+
+  static const Map<String, String> mainDescriptions = {
+    'Deportes': 'Fútbol, running, trekking, ciclismo, fitness...',
+    'Comida': 'Restaurantes, picnic, parrilladas, cafés...',
+    'Naturaleza': 'Camping, senderismo, playa, campo...',
+    'Chill': 'Café, películas, lectura, juegos de mesa...',
+    'Juntas': 'Fiestas, bailes, salidas, reuniones sociales...',
+  };
+
   static const Map<String, IconData> icons = {
     'Deportes': Icons.sports_baseball_rounded,
     'Comida': Icons.restaurant_rounded,
