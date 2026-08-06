@@ -19,6 +19,7 @@ import '../repositories/supabase_activity_repository.dart';
 import '../repositories/activity_repository.dart';
 import '../repositories/clan_repository.dart';
 import '../repositories/supabase_clan_repository.dart';
+import '../location/peru_geography.dart';
 
 // ══════════════════════════════════════════════════════════════
 //  AppState  — Estado global conectado a Supabase
@@ -878,7 +879,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
           }
           
           // Si no hay posición del usuario, o no hay coordenadas de actividad, mostrarla sólo si pertenece a la misma región geográfica
-          return _getGeographicProximityScore(_currentCity ?? '', a.city) < 100;
+          return PeruGeography.proximityScore(_currentCity ?? '', a.city) < 100;
         }).toList();
       } else {
         // Filtrar de forma estricta para excluir actividades de ciudades/regiones distintas
@@ -887,7 +888,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
           if (a.organizerId == _currentUser?.id) return true;
           
           // Debe estar en el mismo grupo de proximidad geográfica (score < 100)
-          return _getGeographicProximityScore(_currentCity ?? '', a.city) < 100;
+          return PeruGeography.proximityScore(_currentCity ?? '', a.city) < 100;
         }).toList();
       }
 
@@ -918,8 +919,8 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
 
         // 3. Fallback de orden lógico basado en distritos, ciudades y provincias vecinas
         if (userCity != null && userCity.isNotEmpty) {
-          final scoreA = _getGeographicProximityScore(userCity, a.city);
-          final scoreB = _getGeographicProximityScore(userCity, b.city);
+          final scoreA = PeruGeography.proximityScore(userCity, a.city);
+          final scoreB = PeruGeography.proximityScore(userCity, b.city);
           if (scoreA != scoreB) {
             return scoreA.compareTo(scoreB);
           }
@@ -950,110 +951,6 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       _error = 'Error cargando actividades: $e';
       _setLoading(false);
     }
-  }
-
-  int _getGeographicProximityScore(String userLocation, String? activityLocation) {
-    if (activityLocation == null || activityLocation.isEmpty) return 100;
-    
-    final cleanUser = userLocation.toLowerCase().trim();
-    final cleanActivity = activityLocation.toLowerCase().trim();
-    
-    if (cleanUser == cleanActivity) {
-      return 0; // Coincidencia exacta de distrito y ciudad
-    }
-    
-    // Extraer partes del usuario (ej. "el tambo", "huancayo")
-    final userParts = cleanUser.split(',').map((s) => s.trim()).toList();
-    final userDistrict = userParts.isNotEmpty ? userParts[0] : '';
-    final userParent = userParts.length > 1 ? userParts[1] : '';
-    
-    // Extraer partes de la actividad (ej. "huancayo", "junín")
-    final activityParts = cleanActivity.split(',').map((s) => s.trim()).toList();
-    final activityDistrict = activityParts.isNotEmpty ? activityParts[0] : '';
-    final activityParent = activityParts.length > 1 ? activityParts[1] : '';
-    
-    // 1. Mismo distrito (ej. "el tambo")
-    if (userDistrict.isNotEmpty && (activityDistrict == userDistrict || activityLocation.contains(userDistrict))) {
-      return 1;
-    }
-    
-    // 2. Misma provincia o ciudad principal (ej. "huancayo")
-    if (userParent.isNotEmpty && (activityDistrict == userParent || activityParent == userParent || activityLocation.contains(userParent))) {
-      return 2;
-    }
-    
-    // 3. Detectar si pertenecen a la misma región general (ej: Junín, Lima, etc.) usando mapeo de palabras clave
-    final String userRegion = _detectRegionGroup(cleanUser);
-    final String activityRegion = _detectRegionGroup(cleanActivity);
-    
-    if (userRegion != 'other' && userRegion == activityRegion) {
-      return 3; // Misma región
-    }
-    
-    // Fallback simple: si comparten alguna palabra clave provincial/regional importante
-    if (userParent.isNotEmpty && cleanActivity.contains(userParent)) {
-      return 3;
-    }
-    if (activityParent.isNotEmpty && cleanUser.contains(activityParent)) {
-      return 3;
-    }
-    
-    return 100; // Distinto
-  }
-
-  String _detectRegionGroup(String location) {
-    final clean = location.toLowerCase();
-    
-    // Grupo 1: Junín (incluye Huancayo y todos sus distritos principales)
-    final juninKeywords = [
-      'junin', 'junín', 'huancayo', 'tambo', 'chilca', 'jauja', 'tarma', 
-      'chupaca', 'concepcion', 'concepción', 'satipo', 'chanchamayo', 
-      'la merced', 'san ramon', 'san ramón', 'oroya', 'yauli', 'sicaya',
-      'pilcomayo', 'sapallanga', 'cajas'
-    ];
-    if (juninKeywords.any((k) => clean.contains(k))) {
-      return 'junin';
-    }
-    
-    // Grupo 2: Lima & Callao
-    final limaKeywords = [
-      'lima', 'callao', 'miraflores', 'san isidro', 'lince', 'surco', 'san borja', 
-      'molina', 'barranco', 'chorrillos', 'rimac', 'rímac', 'breña', 'san miguel', 
-      'magdalena', 'pueblo libre', 'ate', 'victoria', 'surquillos', 'san martin', 
-      'comas', 'carabayllo', 'olivos', 'puente piedra', 'lurigancho', 'chosica', 
-      'vitarte', 'manchay', 'pachacamac', 'cieneguilla', 'lurin', 'lurín', 
-      'villa el salvador', 'villa maria', 'sanjuan'
-    ];
-    if (limaKeywords.any((k) => clean.contains(k))) {
-      return 'lima';
-    }
-
-    // Grupo 3: Arequipa
-    final arequipaKeywords = [
-      'arequipa', 'cayma', 'yanahuara', 'bustamante', 'selva alegre', 'socabaya', 
-      'sachaca', 'miraflores arequipa'
-    ];
-    if (arequipaKeywords.any((k) => clean.contains(k))) {
-      return 'arequipa';
-    }
-
-    // Grupo 4: Cusco
-    final cuscoKeywords = [
-      'cusco', 'cuzco', 'wanchaq', 'san sebastian', 'san sebastián', 'santiago', 'poroy'
-    ];
-    if (cuscoKeywords.any((k) => clean.contains(k))) {
-      return 'cusco';
-    }
-
-    // Grupo 5: Lambayeque / Chiclayo
-    final lambayequeKeywords = [
-      'chiclayo', 'lambayeque', 'ferreñafe', 'pimentel', 'leonardo ortiz'
-    ];
-    if (lambayequeKeywords.any((k) => clean.contains(k))) {
-      return 'lambayeque';
-    }
-    
-    return 'other';
   }
 
   Future<void> _loadMyRequests() async {

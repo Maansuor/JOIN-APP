@@ -7,6 +7,7 @@ import '../models/activity_model.dart';
 import '../models/event_photo_model.dart';
 import '../models/join_request_model.dart';
 import 'activity_repository.dart';
+import '../location/peru_geography.dart';
 
 /// ══════════════════════════════════════════════════════════════
 ///  SupabaseActivityRepository  — Implementación real con Supabase
@@ -58,26 +59,19 @@ class SupabaseActivityRepository implements ActivityRepository {
           conditions.add('city.eq."$province"');
         }
         
-        final cleanCityLower = cleanCity.toLowerCase();
-        final provinceLower = province.toLowerCase();
-        final districtLower = district.toLowerCase();
-        
-        final juninKeywords = [
-          'junin', 'junín', 'huancayo', 'tambo', 'chilca', 'jauja', 'tarma', 
-          'chupaca', 'concepcion', 'concepción', 'satipo', 'chanchamayo', 
-          'la merced', 'san ramon', 'san ramón', 'oroya', 'yauli', 'sicaya',
-          'pilcomayo', 'sapallanga', 'cajas'
-        ];
-        
-        final isUserInJunin = juninKeywords.any((key) => 
-          cleanCityLower.contains(key) || 
-          provinceLower.contains(key) || 
-          districtLower.contains(key)
+        // Algunas actividades se guardan con el nombre de la región en vez del
+        // distrito, así que si el usuario está en una región conocida también
+        // se incluyen las que llevan ese nombre.
+        final region = PeruGeography.regionOfParts(
+          city: cleanCity,
+          district: district,
+          province: province,
         );
-        if (isUserInJunin) {
-          conditions.add('city.eq."Junín"');
+        final regionName = PeruGeography.canonicalRegionName[region];
+        if (regionName != null) {
+          conditions.add('city.eq."$regionName"');
         }
-        
+
         if (currentUserId != null) {
           conditions.add('organizer_id.eq.$currentUserId');
         }
