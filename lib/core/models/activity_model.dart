@@ -1,3 +1,30 @@
+/// Portada por defecto según la categoría, para actividades sin imagen propia.
+///
+/// La usan tanto el modelo al leer de la base como el repositorio al crear,
+/// de modo que una actividad nunca acaba sin portada.
+String defaultImageForCategory(String category) {
+  final clean = category.trim().toLowerCase();
+
+  bool matches(List<String> keywords) => keywords.any(clean.contains);
+
+  if (matches(['deporte', 'sport', 'running', 'futbol', 'fútbol', 'ciclismo', 'natación'])) {
+    return 'assets/images/activities/activity_2_football.jpg';
+  }
+  if (matches(['comida', 'food', 'cocina', 'gastronomía', 'parrillada'])) {
+    return 'assets/images/activities/activity_3_bbq.jpg';
+  }
+  if (matches(['naturaleza', 'nature', 'camping', 'trekking', 'senderismo', 'playa'])) {
+    return 'assets/images/activities/activity_1_hiking.jpg';
+  }
+  if (matches(['chill', 'yoga', 'bienestar', 'meditación'])) {
+    return 'assets/images/activities/activity_4_yoga.jpg';
+  }
+  if (matches(['juntas', 'fiesta', 'social', 'salidas'])) {
+    return 'assets/images/activities/activity_6_picnic.jpg';
+  }
+  return 'assets/images/activities/activity_3_bbq.jpg';
+}
+
 /// Modelo de Actividad para Join
 class Activity {
   final String id;
@@ -98,8 +125,14 @@ class Activity {
     // Imagen del organizador
     final orgImage = (json['organizer_image_url'] ?? json['organizer_image'] ?? json['organizerImageUrl'] ?? '') as String;
 
-    // URL de imagen de portada
-    final imgUrl = (json['cover_image_url'] ?? json['imageUrl'] ?? '') as String;
+    // Portada. Una actividad sin imagen —creada por un seed, una migración o
+    // desde fuera de la app— dejaba imageUrl vacío, y con eso los Image.asset
+    // repartidos por la interfaz fallaban con "Unable to load asset".
+    // Resolverlo aquí cubre de una vez todas las pantallas que la dibujan.
+    final rawImgUrl = (json['cover_image_url'] ?? json['imageUrl'] ?? '') as String;
+    final imgUrl = rawImgUrl.isNotEmpty
+        ? rawImgUrl
+        : defaultImageForCategory((json['category'] ?? '') as String);
 
     final city = json['city'] as String?;
     final meetingLocName = (json['meeting_location_name'] ?? json['meetingLocationName'] ?? locName) as String;

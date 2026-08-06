@@ -5,6 +5,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:join_app/core/providers/app_state.dart';
 import 'package:join_app/core/models/activity_model.dart';
 import 'package:join_app/core/theme/app_colors.dart';
+import 'package:join_app/core/widgets/user_avatar.dart';
 import 'package:intl/intl.dart';
 import 'package:join_app/core/models/join_request_model.dart';
 
@@ -136,25 +137,66 @@ class _ActivityCardState extends State<ActivityCard> {
     ).animate().fadeIn(duration: 500.ms).slideY(begin: 0.08, curve: Curves.easeOutCubic);
   }
 
+  static const double _coverHeight = 210;
+
+  /// Portada de la actividad, tolerante a que no haya imagen o a que falle.
+  ///
+  /// Una actividad sin portada —creada por un seed, una migración o desde
+  /// fuera de la app— hacía reventar la tarjeta con "Unable to load asset".
+  Widget _buildCoverImage() {
+    final url = widget.activity.imageUrl;
+    if (url.isEmpty) return _coverPlaceholder();
+
+    if (url.startsWith('http')) {
+      return Image.network(
+        url,
+        height: _coverHeight,
+        width: double.infinity,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => _coverPlaceholder(),
+      );
+    }
+
+    return Image.asset(
+      url,
+      height: _coverHeight,
+      width: double.infinity,
+      fit: BoxFit.cover,
+      errorBuilder: (_, __, ___) => _coverPlaceholder(),
+    );
+  }
+
+  /// Relleno con el color e icono de la categoría, para que la tarjeta
+  /// mantenga su forma aunque no haya foto.
+  Widget _coverPlaceholder() {
+    return Container(
+      height: _coverHeight,
+      width: double.infinity,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            _categoryColor.withValues(alpha: 0.35),
+            _categoryColor.withValues(alpha: 0.15),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Icon(
+        AppColors.categoryIcons[widget.activity.category] ?? Icons.event_rounded,
+        size: 56,
+        color: Colors.white.withValues(alpha: 0.85),
+      ),
+    );
+  }
+
   Widget _buildImageSection(bool isFull, int slotsLeft) {
     return Stack(
       children: [
         // Imagen
         Hero(
           tag: 'activity-image-${widget.activity.id}',
-          child: widget.activity.imageUrl.startsWith('http')
-              ? Image.network(
-                  widget.activity.imageUrl,
-                  height: 210,
-                  width: double.infinity,
-                  fit: BoxFit.cover,
-                )
-              : Image.asset(
-                  widget.activity.imageUrl,
-                  height: 210,
-                  width: double.infinity,
-                  fit: BoxFit.cover,
-                ),
+          child: _buildCoverImage(),
         ),
 
         // Gradiente inferior (más pronunciado y elegante)
@@ -451,11 +493,10 @@ class _ActivityCardState extends State<ActivityCard> {
                     ],
                   ),
                 ),
-                child: CircleAvatar(
+                child: UserAvatar(
+                  imageUrl: widget.activity.organizerImageUrl,
+                  name: widget.activity.organizerName,
                   radius: 16,
-                  backgroundImage: widget.activity.organizerImageUrl.startsWith('http')
-                      ? NetworkImage(widget.activity.organizerImageUrl) as ImageProvider
-                      : AssetImage(widget.activity.organizerImageUrl),
                 ),
               ),
               const SizedBox(width: 10),

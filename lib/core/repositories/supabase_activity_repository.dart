@@ -24,72 +24,64 @@ class SupabaseActivityRepository implements ActivityRepository {
   @override
   Future<List<Activity>> getActivities({String? category, String? city}) async {
     try {
-      var query = _supabase
-          .from('activities')
-          .select('*, organizer:profiles(*), contributions(title)')
-          .eq('is_active', true);
+      // Sin ciudad no hay zona que filtrar: se piden todas las activas.
+      if (city == null || city.isEmpty) {
+        var query = _supabase
+            .from('activities')
+            .select(_activitySelect)
+            .eq('is_active', true);
 
-      if (category != null && category != 'Todos') {
-        query = query.eq('category', category);
+        if (category != null && category != 'Todos') {
+          query = query.eq('category', category);
+        }
+
+        final data = await query.order('event_datetime', ascending: true);
+        return data.map((e) => Activity.fromJson(_flattenActivityRow(e))).toList();
       }
 
-      if (city != null && city.isNotEmpty) {
-        final currentUserId = _supabase.auth.currentUser?.id;
-        final cleanCity = city.replaceAll('"', '\\"');
-        final parts = city.split(',').map((s) => s.trim()).toList();
-        final district = parts.isNotEmpty ? parts[0].replaceAll('"', '\\"') : '';
-        final province = parts.length > 1 ? parts[1].replaceAll('"', '\\"') : '';
-        
-        final List<String> conditions = [];
-        
-        // Para evitar romper el parser de PostgREST con comas internas en los valores de filtros .or(),
-        // solo agregamos coincidencia exacta completa si la ciudad no contiene comas.
-        if (!cleanCity.contains(',')) {
-          conditions.add('city.eq."$cleanCity"');
-        }
-        
-        // Coincidencia por distrito (ej: "El Tambo")
-        if (district.isNotEmpty) {
-          conditions.add('city.ilike."*$district*"');
-        }
-        
-        // Coincidencia por provincia/departamento (ej: "Huancayo")
-        if (province.isNotEmpty) {
-          conditions.add('city.ilike."*$province*"');
-          conditions.add('city.eq."$province"');
-        }
-        
-        // Algunas actividades se guardan con el nombre de la región en vez del
-        // distrito, así que si el usuario está en una región conocida también
-        // se incluyen las que llevan ese nombre.
-        final region = PeruGeography.regionOfParts(
-          city: cleanCity,
-          district: district,
-          province: province,
-        );
-        final regionName = PeruGeography.canonicalRegionName[region];
-        if (regionName != null) {
-          conditions.add('city.eq."$regionName"');
-        }
+      // Con ciudad se usa la función activities_near: los términos viajan como
+      // parámetro en lugar de interpolarse dentro del filtro .or(), que se
+      // rompía con las comas de nombres como "El Tambo, Huancayo".
+      final data = await _supabase.rpc(
+        'activities_near',
+        params: {
+          'p_terms': _zoneTerms(city),
+          'p_category': category,
+        },
+      ).select(_activitySelect);
 
-        if (currentUserId != null) {
-          conditions.add('organizer_id.eq.$currentUserId');
-        }
-        
-        if (conditions.isNotEmpty) {
-          query = query.or(conditions.join(','));
-        }
-      }
-
-      final data = await query.order('event_datetime', ascending: true);
-
-      return data
-          .map((e) => Activity.fromJson(_flattenActivityRow(e)))
-          .toList();
+      return data.map((e) => Activity.fromJson(_flattenActivityRow(e))).toList();
     } catch (e) {
       debugPrint('Error en Supabase getActivities: $e');
       rethrow;
     }
+  }
+
+  static const String _activitySelect =
+      '*, organizer:profiles(*), contributions(title)';
+
+  /// Términos con los que se considera que una actividad cae en la zona del
+  /// usuario: su ciudad completa, el distrito, la provincia y las palabras
+  /// clave de su región.
+  ///
+  /// Incluir la región es lo que hace que el servidor coincida con el cálculo
+  /// de cercanía del cliente: antes una actividad en Jauja no llegaba a quien
+  /// estaba en El Tambo, aunque PeruGeography las da por cercanas, así que
+  /// desaparecían actividades de la misma región.
+  static List<String> _zoneTerms(String city) {
+    final parts = city.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty);
+    final terms = <String>{city.trim(), ...parts};
+
+    final region = PeruGeography.regionOfParts(
+      city: city,
+      district: parts.isNotEmpty ? parts.first : '',
+      province: parts.length > 1 ? parts.elementAt(1) : '',
+    );
+    if (region != PeruGeography.otherRegion) {
+      terms.addAll(PeruGeography.regionKeywords[region] ?? const []);
+    }
+
+    return terms.where((t) => t.isNotEmpty).toList();
   }
 
   // ── Detalle de actividad ──────────────────────────────────
@@ -153,10 +145,10 @@ class SupabaseActivityRepository implements ActivityRepository {
           await _supabase.storage.from('activities').upload(fileName, file);
           coverUrl = _supabase.storage.from('activities').getPublicUrl(fileName);
         } else {
-          coverUrl = _getDefaultImageForCategory(activity.category);
+          coverUrl = defaultImageForCategory(activity.category);
         }
       } else if (coverUrl.isEmpty) {
-        coverUrl = _getDefaultImageForCategory(activity.category);
+        coverUrl = defaultImageForCategory(activity.category);
       }
 
       // 3. Insertar actividad
@@ -225,10 +217,10 @@ class SupabaseActivityRepository implements ActivityRepository {
           await _supabase.storage.from('activities').upload(fileName, file);
           coverUrl = _supabase.storage.from('activities').getPublicUrl(fileName);
         } else {
-          coverUrl = _getDefaultImageForCategory(activity.category);
+          coverUrl = defaultImageForCategory(activity.category);
         }
       } else if (coverUrl.isEmpty) {
-        coverUrl = _getDefaultImageForCategory(activity.category);
+        coverUrl = defaultImageForCategory(activity.category);
       }
 
       // 2. Modificar actividad
@@ -643,40 +635,4 @@ class SupabaseActivityRepository implements ActivityRepository {
     return '${randomHex(8)}-${randomHex(4)}-4${randomHex(3)}-$y${randomHex(3)}-${randomHex(12)}';
   }
 
-  String _getDefaultImageForCategory(String category) {
-    final cleanCategory = category.trim().toLowerCase();
-    if (cleanCategory.contains('deporte') ||
-        cleanCategory.contains('sport') ||
-        cleanCategory.contains('running') ||
-        cleanCategory.contains('futbol') ||
-        cleanCategory.contains('fútbol') ||
-        cleanCategory.contains('ciclismo') ||
-        cleanCategory.contains('natación')) {
-      return 'assets/images/activities/activity_2_football.jpg';
-    } else if (cleanCategory.contains('comida') ||
-        cleanCategory.contains('food') ||
-        cleanCategory.contains('cocina') ||
-        cleanCategory.contains('gastronomía') ||
-        cleanCategory.contains('parrillada')) {
-      return 'assets/images/activities/activity_3_bbq.jpg';
-    } else if (cleanCategory.contains('naturaleza') ||
-        cleanCategory.contains('nature') ||
-        cleanCategory.contains('camping') ||
-        cleanCategory.contains('trekking') ||
-        cleanCategory.contains('senderismo') ||
-        cleanCategory.contains('playa')) {
-      return 'assets/images/activities/activity_1_hiking.jpg';
-    } else if (cleanCategory.contains('chill') ||
-        cleanCategory.contains('yoga') ||
-        cleanCategory.contains('bienestar') ||
-        cleanCategory.contains('meditación')) {
-      return 'assets/images/activities/activity_4_yoga.jpg';
-    } else if (cleanCategory.contains('juntas') ||
-        cleanCategory.contains('fiesta') ||
-        cleanCategory.contains('social') ||
-        cleanCategory.contains('salidas')) {
-      return 'assets/images/activities/activity_6_picnic.jpg';
-    }
-    return 'assets/images/activities/activity_3_bbq.jpg';
-  }
 }

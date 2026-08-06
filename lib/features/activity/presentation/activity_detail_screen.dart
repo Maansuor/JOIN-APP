@@ -9,6 +9,7 @@ import 'package:join_app/features/activity/presentation/widgets/activity_not_fou
 import 'package:join_app/core/models/activity_model.dart';
 import 'package:join_app/core/models/join_request_model.dart';
 import 'package:join_app/core/theme/app_colors.dart';
+import 'package:join_app/core/widgets/user_avatar.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -342,13 +343,10 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> with Ticker
                                             border: Border.all(
                                                 color: AppColors.primaryOrange, width: 2),
                                           ),
-                                          child: CircleAvatar(
+                                          child: UserAvatar(
+                                            imageUrl: activity.organizerImageUrl,
+                                            name: activity.organizerName,
                                             radius: 24,
-                                            backgroundImage: activity.organizerImageUrl
-                                                    .startsWith('http')
-                                                ? NetworkImage(activity.organizerImageUrl)
-                                                    as ImageProvider
-                                                : AssetImage(activity.organizerImageUrl),
                                           ),
                                         ),
                                       ],

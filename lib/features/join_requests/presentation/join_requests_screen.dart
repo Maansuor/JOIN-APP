@@ -6,6 +6,7 @@ import 'package:join_app/core/providers/app_state.dart';
 import 'package:join_app/core/models/join_request_model.dart';
 import 'package:join_app/core/models/user_model.dart';
 import 'package:join_app/core/theme/app_colors.dart';
+import 'package:join_app/core/widgets/user_avatar.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -309,9 +310,10 @@ class _JoinRequestsScreenState extends State<JoinRequestsScreen> with SingleTick
                     border: Border.all(color: AppColors.primaryOrange, width: 3),
                     boxShadow: [BoxShadow(color: AppColors.primaryOrange.withValues(alpha: 0.25), blurRadius: 20, offset: const Offset(0, 10))],
                   ),
-                  child: CircleAvatar(
+                  child: UserAvatar(
+                    imageUrl: user.profileImageUrl,
+                    name: user.name,
                     radius: 50,
-                    backgroundImage: user.profileImageUrl.startsWith('http') ? NetworkImage(user.profileImageUrl) as ImageProvider : AssetImage(user.profileImageUrl),
                   ),
                 ),
               ),
@@ -609,9 +611,10 @@ class _RequestCardPremium extends StatelessWidget {
                 children: [
                   Hero(
                     tag: 'avatar_${request.userId}',
-                    child: CircleAvatar(
+                    child: UserAvatar(
+                      imageUrl: userImage,
+                      name: request.userName,
                       radius: 26,
-                      backgroundImage: userImage.startsWith('http') ? NetworkImage(userImage) as ImageProvider : AssetImage(userImage),
                     ),
                   ),
                   const SizedBox(width: 16),
