@@ -6,6 +6,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:join_app/core/models/activity_model.dart';
+import 'package:join_app/core/models/activity_recommendations.dart';
 import 'package:join_app/core/providers/app_state.dart';
 import 'package:join_app/core/theme/app_colors.dart';
 
@@ -54,34 +55,25 @@ class _IguanaChecklistState extends State<IguanaChecklist> {
     await prefs.setString(_prefsKey, json.encode(_checked.toList()));
   }
 
-  /// Sugerencias según categoría / etiquetas de la actividad
+  /// Qué llevar, según las categorías del plan.
+  ///
+  /// Antes se decidía buscando palabras sueltas dentro del título y las
+  /// etiquetas, con siete casos escritos a mano: las categorías nuevas caían
+  /// siempre en el genérico y la lista no coincidía con la que se le sugería
+  /// al anfitrión al crear el plan. Ahora ambas salen del mismo sitio.
+  ///
+  /// Las sugerencias que escribió el anfitrión van primero, porque conoce su
+  /// plan mejor que nosotros.
   static List<String> _itemsForActivity(Activity activity) {
-    final haystack =
-        '${activity.category} ${activity.tags.join(' ')} ${activity.title}'
-            .toLowerCase();
+    final propias = activity.suggestions.where((s) => s.trim().isNotEmpty);
 
-    bool has(List<String> keys) => keys.any(haystack.contains);
+    final porCategoria = ActivityRecommendations.forCategories([
+      activity.category,
+      ...activity.tags,
+    ]).map(ActivityRecommendations.withEmoji);
 
-    if (has(['camping', 'campamento'])) {
-      return ['Carpa ⛺', 'Sleeping 🛌', 'Linterna 🔦', 'Agua 💧', 'Repelente 🦟', 'Snacks 🍫'];
-    }
-    if (has(['trekking', 'hiking', 'caminata', 'naturaleza', 'aventura'])) {
-      return ['Zapatillas de trekking 🥾', 'Agua 💧', 'Bloqueador 🧴', 'Gorra 🧢', 'Snacks energéticos 🍫'];
-    }
-    if (has(['playa'])) {
-      return ['Bloqueador 🧴', 'Toalla 🏖️', 'Ropa de baño 🩳', 'Agua 💧', 'Lentes de sol 🕶️'];
-    }
-    if (has(['parrillada', 'parrilla', 'bbq', 'comida', 'gastronomía', 'picnic'])) {
-      return ['Tu aporte del grupo 🍗', 'Bebidas frías 🥤', 'Hielo 🧊', 'Buen apetito 😋'];
-    }
-    if (has(['deportes', 'fútbol', 'futbol', 'pichanga', 'running', 'ciclismo', 'natación'])) {
-      return ['Ropa deportiva 👕', 'Zapatillas 👟', 'Agua 💧', 'Toalla 🤍', 'Muchas ganas 🔥'];
-    }
-    if (has(['fiesta', 'juntas', 'cumple', 'karaoke', 'chill'])) {
-      return ['Tu aporte 🥤', 'Parlante o playlist 🎵', 'Juegos de mesa 🎲', 'Energía al 100 ⚡'];
-    }
-    // Genérico
-    return ['Celular cargado 🔋', 'Agua 💧', 'Puntualidad ⏰', 'Buena actitud 😎'];
+    final items = <String>{...propias, ...porCategoria};
+    return items.take(8).toList();
   }
 
   @override

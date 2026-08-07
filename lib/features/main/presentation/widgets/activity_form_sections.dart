@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:join_app/core/models/interest_model.dart';
+import 'package:join_app/core/models/activity_recommendations.dart';
 import 'package:join_app/core/theme/app_colors.dart';
 
 /// ══════════════════════════════════════════════════════════════
@@ -531,39 +532,11 @@ class HostSuggestionsSection extends StatefulWidget {
     required this.onRemove,
   });
 
-  /// Emoji contextual según el contenido de la sugerencia
-  static String emojiFor(String text) {
-    final lower = text.toLowerCase();
-    if (lower.contains('zapati') || lower.contains('calzado') || lower.contains('tenis') || lower.contains('bota')) return '👟';
-    if (lower.contains('bloqueador') || lower.contains('solar') || lower.contains('protector')) return '🧴';
-    if (lower.contains('ropa') || lower.contains('abrigo') || lower.contains('chaqueta') || lower.contains('casaca') || lower.contains('capas')) return '🧥';
-    if (lower.contains('agua') || lower.contains('hidrat')) return '💧';
-    if (lower.contains('gorra') || lower.contains('sombrero') || lower.contains('lente')) return '🧢';
-    if (lower.contains('puntual') || lower.contains('hora') || lower.contains('temprano')) return '⏰';
-    if (lower.contains('repelente') || lower.contains('insecto')) return '🦟';
-    if (lower.contains('linterna') || lower.contains('frontal') || lower.contains('luz')) return '🔦';
-    if (lower.contains('mochila') || lower.contains('bolso') || lower.contains('morral')) return '🎒';
-    if (lower.contains('dinero') || lower.contains('efectivo') || lower.contains('yape') || lower.contains('cambio')) return '💰';
-    if (lower.contains('comer') || lower.contains('desayun') || lower.contains('almuerz') || lower.contains('apetito')) return '🍽️';
-    if (lower.contains('estacion') || lower.contains('parque') || lower.contains('movilidad')) return '🚌';
-    if (lower.contains('foto') || lower.contains('cámara') || lower.contains('celular')) return '📸';
-    if (lower.contains('toalla') || lower.contains('cambio de ropa')) return '🧳';
-    if (lower.contains('bebida') || lower.contains('gaseosa') || lower.contains('trago')) return '🥤';
-    if (lower.contains('snack') || lower.contains('piqueo')) return '🍿';
-    if (lower.contains('juego') || lower.contains('cartas') || lower.contains('mesa')) return '🎲';
-    if (lower.contains('vibra') || lower.contains('actitud') || lower.contains('energ')) return '⚡';
-    if (lower.contains('playlist') || lower.contains('música') || lower.contains('parlante')) return '🎵';
-    return '💡';
-  }
+  /// Emoji contextual según el contenido de la sugerencia.
+  /// La tabla vive en ActivityRecommendations, junto a las recomendaciones
+  /// que la usan, para no mantener dos versiones distintas.
+  static String emojiFor(String text) => ActivityRecommendations.emojiFor(text);
 
-  /// Atajos de sugerencias según las categorías principales del plan
-  static const Map<String, List<String>> _quickByMain = {
-    'Deportes': ['Ropa deportiva', 'Zapatillas cómodas', 'Agua', 'Toalla'],
-    'Comida': ['Buen apetito', 'Efectivo o Yape', 'Bebida para compartir'],
-    'Naturaleza': ['Ropa por capas', 'Zapatillas de trekking', 'Bloqueador', 'Repelente', 'Agua 1L+'],
-    'Chill': ['Puntualidad', 'Buena vibra', 'Snack para compartir'],
-    'Juntas': ['Bebidas', 'Snacks', 'Juegos de mesa', 'Playlist'],
-  };
 
   @override
   State<HostSuggestionsSection> createState() => _HostSuggestionsSectionState();
@@ -592,16 +565,12 @@ class _HostSuggestionsSectionState extends State<HostSuggestionsSection> {
   Widget build(BuildContext context) {
     final accent = widget.accentColor;
 
-    // Atajos según las principales elegidas (que aún no estén agregadas)
-    final quicks = <String>[];
-    for (final main in widget.selectedCategories) {
-      for (final q in HostSuggestionsSection._quickByMain[main] ?? const <String>[]) {
-        final withEmoji = '${HostSuggestionsSection.emojiFor(q)} $q';
-        if (!widget.suggestions.contains(withEmoji) && !quicks.contains(q)) {
-          quicks.add(q);
-        }
-      }
-    }
+    // Atajos según las categorías elegidas, quitando los ya agregados.
+    // Se toman en cuenta las subcategorías, así que una pichanga sugiere
+    // "chimpunes" en lugar del genérico "ropa deportiva".
+    final quicks = ActivityRecommendations.quickPicksFor(widget.selectedCategories)
+        .where((q) => !widget.suggestions.contains('${HostSuggestionsSection.emojiFor(q)} $q'))
+        .toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
