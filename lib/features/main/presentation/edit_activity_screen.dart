@@ -7,11 +7,11 @@ import 'package:join_app/features/activity/presentation/widgets/activity_not_fou
 import 'package:join_app/core/models/activity_model.dart';
 import 'package:intl/intl.dart';
 import 'dart:io';
-import 'package:image_picker/image_picker.dart';
 import 'package:join_app/core/models/interest_model.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:join_app/features/main/presentation/map_picker_screen.dart';
 import 'package:join_app/features/main/presentation/widgets/activity_form_sections.dart';
+import 'package:join_app/features/main/presentation/widgets/cover_picker_sheet.dart';
 import 'package:join_app/features/main/presentation/widgets/activity_form_premium.dart';
 
 /// Pantalla para editar una actividad existente con una interfaz premium
@@ -512,43 +512,16 @@ class _EditActivityScreenState extends State<EditActivityScreen> {
     );
   }
 
-  void _photoBottomSheet() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        margin: const EdgeInsets.all(16),
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24)),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('Seleccionar foto', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 20),
-            ListTile(
-              leading: Icon(Icons.camera_alt_rounded, color: _selectedColor),
-              title: const Text('Tomar foto'),
-              onTap: () async {
-                Navigator.pop(context);
-                final picker = ImagePicker();
-                final XFile? image = await picker.pickImage(source: ImageSource.camera);
-                if (image != null) setState(() => _selectedPhotoPath = image.path);
-              },
-            ),
-            ListTile(
-              leading: Icon(Icons.photo_library_rounded, color: _selectedColor),
-              title: const Text('Elegir de galería'),
-              onTap: () async {
-                Navigator.pop(context);
-                final picker = ImagePicker();
-                final XFile? image = await picker.pickImage(source: ImageSource.gallery);
-                if (image != null) setState(() => _selectedPhotoPath = image.path);
-              },
-            ),
-          ],
-        ),
-      ),
+  Future<void> _photoBottomSheet() async {
+    final elegida = await showCoverPickerSheet(
+      context,
+      category: _primaryCategory,
+      accent: _selectedColor,
+      selected: _selectedPhotoPath,
     );
+    if (elegida != null && mounted) {
+      setState(() => _selectedPhotoPath = elegida);
+    }
   }
 
   Widget _buildImage(String path) {

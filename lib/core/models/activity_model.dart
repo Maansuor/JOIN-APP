@@ -1,29 +1,13 @@
+import 'interest_model.dart';
+
 /// Portada por defecto según la categoría, para actividades sin imagen propia.
 ///
 /// La usan tanto el modelo al leer de la base como el repositorio al crear,
-/// de modo que una actividad nunca acaba sin portada.
-String defaultImageForCategory(String category) {
-  final clean = category.trim().toLowerCase();
-
-  bool matches(List<String> keywords) => keywords.any(clean.contains);
-
-  if (matches(['deporte', 'sport', 'running', 'futbol', 'fútbol', 'ciclismo', 'natación'])) {
-    return 'assets/images/activities/activity_2_football.jpg';
-  }
-  if (matches(['comida', 'food', 'cocina', 'gastronomía', 'parrillada'])) {
-    return 'assets/images/activities/activity_3_bbq.jpg';
-  }
-  if (matches(['naturaleza', 'nature', 'camping', 'trekking', 'senderismo', 'playa'])) {
-    return 'assets/images/activities/activity_1_hiking.jpg';
-  }
-  if (matches(['chill', 'yoga', 'bienestar', 'meditación'])) {
-    return 'assets/images/activities/activity_4_yoga.jpg';
-  }
-  if (matches(['juntas', 'fiesta', 'social', 'salidas'])) {
-    return 'assets/images/activities/activity_6_picnic.jpg';
-  }
-  return 'assets/images/activities/activity_3_bbq.jpg';
-}
+/// de modo que una actividad nunca acaba sin portada. La decisión vive en
+/// CategoryConstants: antes había aquí una lista de palabras clave aparte que
+/// había que mantener sincronizada a mano con las categorías reales.
+String defaultImageForCategory(String category) =>
+    CategoryConstants.defaultCoverFor(category);
 
 /// Modelo de Actividad para Join
 class Activity {

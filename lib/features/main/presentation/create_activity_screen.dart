@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'package:image_picker/image_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -13,6 +12,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:join_app/core/theme/app_colors.dart';
 import 'package:intl/intl.dart';
 import 'package:join_app/core/models/interest_model.dart';
+import 'package:join_app/features/main/presentation/widgets/cover_picker_sheet.dart';
 
 class CreateActivityScreen extends StatefulWidget {
   const CreateActivityScreen({super.key});
@@ -605,74 +605,16 @@ class _CreateActivityScreenState extends State<CreateActivityScreen>
     );
   }
 
-  void _showPhotoSheet() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        margin: const EdgeInsets.all(16),
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(24),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 40,
-              height: 4,
-              margin: const EdgeInsets.only(bottom: 20),
-              decoration: BoxDecoration(
-                color: Colors.grey[300],
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const Text(
-              'Seleccionar foto',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: AppColors.navyBlue,
-              ),
-            ),
-            const SizedBox(height: 20),
-            _SheetOption(
-              icon: Icons.camera_alt_rounded,
-              label: 'Tomar foto',
-              color: _selectedColor,
-              onTap: () async {
-                Navigator.pop(context);
-                final picker = ImagePicker();
-                final XFile? image = await picker.pickImage(source: ImageSource.camera, imageQuality: 70);
-                if (image != null) {
-                  setState(() {
-                    _selectedPhotoPath = image.path;
-                  });
-                }
-              },
-            ),
-            const SizedBox(height: 10),
-            _SheetOption(
-              icon: Icons.photo_library_rounded,
-              label: 'Elegir de galería',
-              color: _selectedColor,
-              onTap: () async {
-                Navigator.pop(context);
-                final picker = ImagePicker();
-                final XFile? image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
-                if (image != null) {
-                  setState(() {
-                    _selectedPhotoPath = image.path;
-                  });
-                }
-              },
-            ),
-            const SizedBox(height: 10),
-          ],
-        ),
-      ),
+  Future<void> _showPhotoSheet() async {
+    final elegida = await showCoverPickerSheet(
+      context,
+      category: _selectedCategory,
+      accent: _selectedColor,
+      selected: _selectedPhotoPath,
     );
+    if (elegida != null && mounted) {
+      setState(() => _selectedPhotoPath = elegida);
+    }
   }
 
   Widget _buildImage(String path) {
@@ -1127,54 +1069,3 @@ class _DateTimeTileState extends State<_DateTimeTile> {
   }
 }
 
-class _SheetOption extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _SheetOption({
-    required this.icon,
-    required this.label,
-    required this.color,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.06),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: color.withValues(alpha: 0.15)),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(icon, color: color, size: 22),
-            ),
-            const SizedBox(width: 14),
-            Text(
-              label,
-              style: TextStyle(
-                color: color,
-                fontWeight: FontWeight.bold,
-                fontSize: 15,
-              ),
-            ),
-            const Spacer(),
-            Icon(Icons.arrow_forward_ios_rounded, size: 14, color: color.withValues(alpha: 0.5)),
-          ],
-        ),
-      ),
-    );
-  }
-}

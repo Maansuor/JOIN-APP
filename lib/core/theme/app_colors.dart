@@ -31,23 +31,5 @@ class AppColors {
   static const Color error = Color(0xFFE53935);
   static const Color warning = Color(0xFFFFA726);
 
-  // --- Categorías de actividad ---
-  static const Map<String, Color> categoryColors = {
-    'Todos': primaryOrange,
-    'Deportes': Color(0xFFE53935),
-    'Comida': Color(0xFFFFA726),
-    'Naturaleza': Color(0xFF43A047),
-    'Chill': Color(0xFF5E35B1),
-    'Juntas': Color(0xFFD81B60),
-  };
 
-  // --- Íconos de categoría ---
-  static const Map<String, IconData> categoryIcons = {
-    'Todos': Icons.category,
-    'Deportes': Icons.sports_baseball,
-    'Comida': Icons.restaurant,
-    'Naturaleza': Icons.forest,
-    'Chill': Icons.local_cafe,
-    'Juntas': Icons.celebration,
-  };
 }

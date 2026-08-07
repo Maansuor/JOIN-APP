@@ -5,6 +5,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:join_app/core/providers/app_state.dart';
 import 'package:join_app/core/models/activity_model.dart';
 import 'package:join_app/core/theme/app_colors.dart';
+import 'package:join_app/core/models/interest_model.dart';
 import 'package:join_app/core/widgets/user_avatar.dart';
 import 'package:intl/intl.dart';
 import 'package:join_app/core/models/join_request_model.dart';
@@ -30,39 +31,14 @@ class _ActivityCardState extends State<ActivityCard> {
 
   String get _primaryCategory => widget.activity.category.split(',').first.trim();
 
-  Color get _categoryColor {
-    switch (_primaryCategory) {
-      case 'Deportes':
-        return const Color(0xFFE53935);
-      case 'Comida':
-        return const Color(0xFFFFA726);
-      case 'Naturaleza':
-        return const Color(0xFF2E7D32);
-      case 'Chill':
-        return const Color(0xFF5E35B1);
-      case 'Juntas':
-        return const Color(0xFFD81B60);
-      default:
-        return AppColors.primaryOrange;
-    }
-  }
+  // Color e icono salen de CategoryConstants: antes estaban copiados aquí con
+  // un switch de las cinco categorías originales, así que cualquier categoría
+  // nueva se quedaba sin su color.
+  Color get _categoryColor =>
+      CategoryConstants.colors[_primaryCategory] ?? AppColors.primaryOrange;
 
-  IconData get _categoryIcon {
-    switch (_primaryCategory) {
-      case 'Deportes':
-        return Icons.sports_baseball_rounded;
-      case 'Comida':
-        return Icons.restaurant_rounded;
-      case 'Naturaleza':
-        return Icons.forest_rounded;
-      case 'Chill':
-        return Icons.local_cafe_rounded;
-      case 'Juntas':
-        return Icons.celebration_rounded;
-      default:
-        return Icons.category_rounded;
-    }
-  }
+  IconData get _categoryIcon =>
+      CategoryConstants.icons[_primaryCategory] ?? Icons.category_rounded;
 
   String get _dateLabel {
     final dt = widget.activity.eventDateTime;
@@ -183,7 +159,7 @@ class _ActivityCardState extends State<ActivityCard> {
         ),
       ),
       child: Icon(
-        AppColors.categoryIcons[widget.activity.category] ?? Icons.event_rounded,
+        CategoryConstants.icons[_primaryCategory] ?? Icons.event_rounded,
         size: 56,
         color: Colors.white.withValues(alpha: 0.85),
       ),
