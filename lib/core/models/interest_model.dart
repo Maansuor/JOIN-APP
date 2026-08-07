@@ -234,6 +234,26 @@ class CategoryConstants {
     return null;
   }
 
+  /// Deja una selección de categorías en la forma que espera el formulario:
+  /// exactamente una principal y sólo subcategorías suyas.
+  ///
+  /// Hace falta porque los planes creados antes podían guardar varias
+  /// principales, y porque una actividad puede llegar con subcategorías de
+  /// ramas distintas. Se conserva la primera principal reconocida.
+  static Set<String> normalizeSelection(Iterable<String> seleccion) {
+    final limpias = seleccion.map((c) => c.trim()).where((c) => c.isNotEmpty);
+
+    String? principal;
+    for (final nombre in limpias) {
+      principal = mainCategoryOf(nombre);
+      if (principal != null) break;
+    }
+    principal ??= mainCategories.first;
+
+    final subsValidas = groups[principal] ?? const <String>[];
+    return {principal, ...limpias.where(subsValidas.contains)};
+  }
+
   static const String _dir = 'assets/images/activities';
 
   /// Portadas sugeridas por categoría; la primera es la que se usa por defecto.

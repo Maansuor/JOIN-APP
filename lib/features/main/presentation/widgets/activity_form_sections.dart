@@ -14,7 +14,6 @@ import 'package:join_app/core/theme/app_colors.dart';
 ///   · HostSuggestionsSection — recomendaciones del anfitrión
 /// ══════════════════════════════════════════════════════════════
 
-const _kMaxMains = 3;
 const _kMaxSubs = 5;
 
 // ─────────────────────────────────────────────────────────────────
@@ -43,25 +42,23 @@ class GroupedCategoryPicker extends StatelessWidget {
     ));
   }
 
+  /// Elige la categoría principal del plan, reemplazando la anterior.
+  ///
+  /// Sólo puede haber una: es la que decide la portada, el color, el icono y
+  /// las recomendaciones, y todos ellos son de valor único. Cuando se permitían
+  /// varias, el código tenía que quedarse con "la primera" en silencio, de modo
+  /// que un plan de Académico marcado también como Deportes acababa mostrando
+  /// recomendaciones de deportes.
+  ///
+  /// Se comporta como un radio: tocar otra la cambia directamente, sin obligar
+  /// a deseleccionar primero.
   void _toggleMain(BuildContext context, String cat) {
+    if (_mains.contains(cat)) return; // Ya es la elegida
+
     HapticFeedback.selectionClick();
-    final next = Set<String>.from(selected);
-    if (next.contains(cat)) {
-      if (_mains.length <= 1) {
-        _snack(context, 'Tu plan necesita al menos 1 categoría principal.');
-        return;
-      }
-      next.remove(cat);
-      // Al quitar la principal se quitan sus subcategorías
-      next.removeAll(CategoryConstants.groups[cat] ?? const []);
-    } else {
-      if (_mains.length >= _kMaxMains) {
-        _snack(context, 'Máximo $_kMaxMains categorías principales.');
-        return;
-      }
-      next.add(cat);
-    }
-    onChanged(next);
+    // Se conserva sólo lo que pertenece a la nueva principal.
+    final subsValidas = CategoryConstants.groups[cat] ?? const <String>[];
+    onChanged({cat, ..._subs.where(subsValidas.contains)});
   }
 
   void _toggleSub(BuildContext context, String cat) {

@@ -93,17 +93,11 @@ class _EditActivityScreenState extends State<EditActivityScreen> {
     _suggestions.clear();
     _suggestions.addAll(_activity!.suggestions);
     
-    _selectedCategories.clear();
-    _selectedCategories.addAll(_activity!.category.split(',').map((c) => c.trim()).where((c) => c.isNotEmpty));
-    // Normalizar: toda subcategoría debe tener su principal presente
-    for (final sub in _selectedCategories.toList()) {
-      CategoryConstants.groups.forEach((main, subs) {
-        if (subs.contains(sub)) _selectedCategories.add(main);
-      });
-    }
-    if (!_selectedCategories.any(CategoryConstants.groups.containsKey)) {
-      _selectedCategories.add('Deportes');
-    }
+    // Los planes creados antes podían guardar varias principales; se deja una
+    // sola, que es lo que decide portada, color e icono.
+    _selectedCategories
+      ..clear()
+      ..addAll(CategoryConstants.normalizeSelection(_activity!.category.split(',')));
 
     // Coordenadas del lugar del plan (para el selector de mapa)
     _selectedLocation = _activity!.latitude != null && _activity!.longitude != null

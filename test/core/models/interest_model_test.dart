@@ -110,6 +110,55 @@ void main() {
     });
   });
 
+  group('normalizeSelection', () {
+    test('deja una sola principal cuando venían varias', () {
+      // Los planes creados antes podían guardar hasta tres.
+      final resultado = CategoryConstants.normalizeSelection(
+        ['Deportes', 'Académico', 'Comida'],
+      );
+
+      final principales =
+          resultado.where(CategoryConstants.groups.containsKey).toList();
+      expect(principales, hasLength(1));
+      expect(principales.first, 'Deportes');
+    });
+
+    test('conserva las subcategorías que pertenecen a la principal', () {
+      final resultado = CategoryConstants.normalizeSelection(
+        ['Deportes', 'Fútbol', 'Vóley'],
+      );
+      expect(resultado, containsAll(['Deportes', 'Fútbol', 'Vóley']));
+    });
+
+    test('descarta las subcategorías de otra rama', () {
+      // "Camping" es de Naturaleza: no pinta nada en un plan de Deportes.
+      final resultado = CategoryConstants.normalizeSelection(
+        ['Deportes', 'Fútbol', 'Camping'],
+      );
+      expect(resultado, contains('Fútbol'));
+      expect(resultado, isNot(contains('Camping')));
+    });
+
+    test('deduce la principal si sólo llegan subcategorías', () {
+      final resultado = CategoryConstants.normalizeSelection(['Programación']);
+      expect(resultado, contains('Académico'));
+      expect(resultado, contains('Programación'));
+    });
+
+    test('siempre devuelve una principal, aunque no reconozca nada', () {
+      final resultado = CategoryConstants.normalizeSelection(['algo raro']);
+      final principales =
+          resultado.where(CategoryConstants.groups.containsKey).toList();
+      expect(principales, hasLength(1));
+    });
+
+    test('una selección vacía también recibe una principal', () {
+      final resultado = CategoryConstants.normalizeSelection([]);
+      expect(resultado, hasLength(1));
+      expect(CategoryConstants.groups.containsKey(resultado.first), isTrue);
+    });
+  });
+
   group('InterestMapper', () {
     test('un interés arrastra su categoría principal', () {
       final resultado = InterestMapper.getCategoriesForInterests(['Fútbol']);
