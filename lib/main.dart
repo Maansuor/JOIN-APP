@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:join_app/core/providers/app_state.dart';
 import 'package:join_app/core/theme/app_theme.dart';
+import 'package:join_app/features/splash/presentation/splash_screen.dart';
 import 'package:join_app/features/auth/presentation/login_screen.dart';
 import 'package:join_app/features/auth/presentation/onboarding_screen.dart';
 import 'package:join_app/features/main/presentation/create_activity_screen.dart';
@@ -88,17 +89,22 @@ class _JoinAppState extends State<JoinApp> {
 
   GoRouter _buildRouter() {
     return GoRouter(
-      initialLocation: '/login', // Dejar que el redirect decida a dónde ir basado en la sesión
+      initialLocation: '/', // La splash decide a dónde ir cuando termina
       // Escucha cambios en AppState para el redirect
       refreshListenable: context.read<AppState>(),
       redirect: (context, state) {
         final appState = context.read<AppState>();
+        final location = state.uri.toString();
+
+        // La splash se encarga de su propia salida. Sin esto, en cuanto
+        // AppState termina de inicializar el redirect la echaría de la
+        // pantalla y la animación se cortaría a media caída.
+        if (location == '/') return null;
 
         // Esperar inicialización completa
         if (!appState.isInitialized) return null;
 
         final isLoggedIn = appState.isLoggedIn;
-        final location = state.uri.toString();
         final isLoginRoute = location == '/login';
         final isOnboardingRoute = location.startsWith('/onboarding');
         final isMainRoute = location.startsWith('/main');
@@ -126,7 +132,7 @@ class _JoinAppState extends State<JoinApp> {
       routes: [
         GoRoute(
           path: '/',
-          redirect: (context, state) => '/login',
+          builder: (context, state) => const SplashScreen(),
         ),
         GoRoute(
           path: '/login',

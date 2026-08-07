@@ -45,16 +45,21 @@ dev_dependencies:
   flutter_native_splash: ^2.3.10
   flutter_launcher_icons: ^0.13.1
 
-# Configuración del Splash Screen
+# Splash nativo: sólo el fondo, sin logo.
+#
+# Es la pantalla que enseña el sistema mientras arranca el motor de Flutter, y
+# no puede animarse. Si mostrara el logo centrado, al entrar la animación el
+# logo daría un salto para volver a caer desde arriba. Dejándolo vacío, la
+# transición al splash animado es invisible: fondo -> fondo con logo cayendo.
 flutter_native_splash:
   color: "#FFFFFF"
-  image: assets/images/join-logo.png
+  color_dark: "#0A0D14"
   android: true
   ios: true
   web: false
   android_12:
-    image: assets/images/join-logo.png
     color: "#FFFFFF"
+    color_dark: "#0A0D14"
 
 # Configuración del Icono de la App
 flutter_launcher_icons:
